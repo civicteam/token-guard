@@ -1,37 +1,11 @@
 import * as anchor from "@project-serum/anchor";
-
-import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  Token,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
-import {TransactionInstruction} from "@solana/web3.js";
-import BN from "bn.js";
-import { TokenGuard } from "../../target/types/token_guard";
 import {Program, web3} from "@project-serum/anchor";
 
-const SPL_ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID = new anchor.web3.PublicKey(
-  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-);
-
-export interface TokenGuardState {
-  id: anchor.web3.PublicKey,
-  outMint: anchor.web3.PublicKey,
-  recipient: anchor.web3.PublicKey
-  mintAuthority: anchor.web3.PublicKey;
-  gatekeeperNetwork: anchor.web3.PublicKey;
-}
-
-const getTokenWallet = async (
-  wallet: anchor.web3.PublicKey,
-  mint: anchor.web3.PublicKey
-) =>
-  (
-    await anchor.web3.PublicKey.findProgramAddress(
-      [wallet.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-      SPL_ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID
-    )
-  )[0];
+import {ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID,} from "@solana/spl-token";
+import {TransactionInstruction} from "@solana/web3.js";
+import BN from "bn.js";
+import {TokenGuard} from "../../target/types/token_guard";
+import {deriveMintAuthority, getTokenWallet} from "./util";
 
 export const exchange = async (
   program: Program<TokenGuard>,
@@ -44,11 +18,7 @@ export const exchange = async (
   const tokenGuardAccount = await program.account.tokenGuard.fetch(tokenGuard);
   const senderAta = await getTokenWallet(sender, tokenGuardAccount.outMint);
 
-  const [mintAuthority] = await web3.PublicKey.findProgramAddress([
-      Buffer.from('token_guard_out_mint_authority'),
-      tokenGuard.toBuffer(),
-    ],
-    program.programId);
+  const [mintAuthority] = await deriveMintAuthority(tokenGuard, program);
 
   const createATAInstruction = Token.createAssociatedTokenAccountInstruction(
       ASSOCIATED_TOKEN_PROGRAM_ID,

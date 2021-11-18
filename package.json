@@ -1,4 +1,10 @@
 {
+  "name": "@civic/token-guard",
+  "description": "Client SDK for the TokenGuard Solana program",
+  "version": "0.0.1",
+  "author": "dankelleher @dankelleher",
+  "bugs": "https://github.com/civicteam/token-guard/issues",
+  "license": "MIT",
   "dependencies": {
     "@project-serum/anchor": "^0.18.0",
     "@solana/spl-token": "^0.1.8"

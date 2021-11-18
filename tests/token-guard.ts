@@ -6,7 +6,7 @@ import { TokenGuard } from '../target/types/token_guard';
 import {GatekeeperNetworkService, GatekeeperService} from "@identity.com/solana-gatekeeper-lib";
 import { GatewayToken } from '@identity.com/solana-gateway-ts';
 import { DummySpender } from '../target/types/dummy_spender';
-import {exchange} from "./util/exchange";
+import {exchange, initialize, TokenGuardState} from "../src/";
 
 const { expect } = chai;
 
@@ -14,9 +14,6 @@ describe('token-guard', () => {
   // Configure the client to use the local cluster.
   const provider = anchor.Provider.local();
   anchor.setProvider(provider);
-
-  // The account that contains the tokenGuard information
-  const tokenGuard = web3.Keypair.generate();
 
   // The sender of SOL, recipient of minted tokens
   const sender = web3.Keypair.generate();
@@ -31,39 +28,25 @@ describe('token-guard', () => {
   // the gateway token for the sender
   let gatewayToken: GatewayToken;
 
-  // the mint account of the tokens that will be minted by the tokenGuard
-  const mint = web3.Keypair.generate();
-
   const program = anchor.workspace.TokenGuard as Program<TokenGuard>;
-
-  let mintAuthority: web3.PublicKey;
-  let mintAuthorityBump: number;
 
   // the token account of the SOL sender, to store the minted tokens in
   let senderAta: web3.PublicKey;
 
+  // The account on chain that contains the token guard information
   let tokenGuardAccount;
+  // The result of the initialize function call. Essentially the same information as tokenGuardAccount
+  // plus the tokenGuard public key.
+  let tokenGuardState: TokenGuardState;
 
+  // a handle for a chain log listener (kept so it can be closed again)
   let listenerId: number;
 
   const exchangeAmount = 1_000;
   const topUpAmount = exchangeAmount + 10_000;
 
-  before(async () => {
+  before('Set up the log listener for easier debugging', async () => {
     listenerId = provider.connection.onLogs('all', console.log, 'confirmed');
-
-    senderAta = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      mint.publicKey,
-      sender.publicKey,
-      true
-    );
-    [mintAuthority, mintAuthorityBump] = await web3.PublicKey.findProgramAddress([
-        Buffer.from('token_guard_out_mint_authority'),
-        tokenGuard.publicKey.toBuffer(),
-      ],
-      program.programId);
   })
 
   before('Set up gatekeeper network and gateway token', async () => {
@@ -101,57 +84,32 @@ describe('token-guard', () => {
   after(() => provider.connection.removeOnLogsListener(listenerId))
 
   it('initialises a new tokenGuard', async () => {
+    tokenGuardState = await initialize(program, provider, gatekeeperNetwork.publicKey, recipient.publicKey);
+
     console.log({
-      tokenGuard: tokenGuard.publicKey.toString(),
-      mint: mint.publicKey.toString(),
-      mintAuthority: mintAuthority.toString(),
+      tokenGuard: tokenGuardState.id.toString(),
+      mint: tokenGuardState.outMint.toString(),
       recipient: recipient.publicKey.toString(),
-      senderAta: senderAta.toString(),
       sender: sender.publicKey.toString()
     });
 
-    await program.rpc.initialize(gatekeeperNetwork.publicKey, mintAuthorityBump, {
-      accounts: {
-        tokenGuard: tokenGuard.publicKey,
-        recipient: recipient.publicKey,
-        authority: provider.wallet.publicKey,
-        outMint: mint.publicKey,
-        mintAuthority: mintAuthority,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: web3.SystemProgram.programId,
-        rent: web3.SYSVAR_RENT_PUBKEY
-      },
-      signers: [tokenGuard, mint],
-      instructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: provider.wallet.publicKey,
-          newAccountPubkey: mint.publicKey,
-          space: MintLayout.span,
-          lamports:
-            await provider.connection.getMinimumBalanceForRentExemption(
-              MintLayout.span
-            ),
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        Token.createInitMintInstruction(
-          TOKEN_PROGRAM_ID,
-          mint.publicKey,
-          0,
-          mintAuthority,
-          mintAuthority
-        )
-      ],
-    });
-
-    tokenGuardAccount = await program.account.tokenGuard.fetch(tokenGuard.publicKey);
+    tokenGuardAccount = await program.account.tokenGuard.fetch(tokenGuardState.id);
 
     expect(tokenGuardAccount.recipient.toString()).to.equal(recipient.publicKey.toString())
-    expect(tokenGuardAccount.outMint.toString()).to.equal(mint.publicKey.toString())
+    expect(tokenGuardAccount.outMint.toString()).to.equal(tokenGuardState.outMint.toString())
     expect(tokenGuardAccount.authority.toString()).to.equal(provider.wallet.publicKey.toString())
     expect(tokenGuardAccount.gatekeeperNetwork.toString()).to.equal(gatekeeperNetwork.publicKey.toString())
   });
 
   it('exchanges sol for tokens', async () => {
+    senderAta = await Token.getAssociatedTokenAddress(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      tokenGuardState.outMint,
+      sender.publicKey,
+      true
+    );
+
     // fund the sender
     await provider.send(
       new web3.Transaction().add(web3.SystemProgram.transfer({
@@ -164,12 +122,12 @@ describe('token-guard', () => {
     // sender exchanges sol for tokens
     const txSig = await program.rpc.exchange(new BN(exchangeAmount), {
       accounts: {
-        tokenGuard: tokenGuard.publicKey,
+        tokenGuard: tokenGuardState.id,
         payer: sender.publicKey,
         payerAta: senderAta,
-        recipient: recipient.publicKey,
-        outMint: mint.publicKey,
-        mintAuthority: mintAuthority,
+        recipient: tokenGuardState.recipient,
+        outMint: tokenGuardState.outMint,
+        mintAuthority: tokenGuardState.mintAuthority,
         gatewayToken: gatewayToken.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
@@ -180,7 +138,7 @@ describe('token-guard', () => {
         Token.createAssociatedTokenAccountInstruction(
           ASSOCIATED_TOKEN_PROGRAM_ID,
           TOKEN_PROGRAM_ID,
-          mint.publicKey,
+          tokenGuardAccount.outMint,
           senderAta,
           sender.publicKey,
           provider.wallet.publicKey,
@@ -218,7 +176,7 @@ describe('token-guard', () => {
 
     const tokenGuardInstructions = await exchange(
       program,
-      tokenGuard.publicKey,
+      tokenGuardState.id,
       sender.publicKey,
       provider.wallet.publicKey,
       gatewayToken.publicKey,
@@ -228,14 +186,14 @@ describe('token-guard', () => {
     const burnerATA = await Token.getAssociatedTokenAddress(
       ASSOCIATED_TOKEN_PROGRAM_ID,
       TOKEN_PROGRAM_ID,
-      mint.publicKey,
+      tokenGuardState.outMint,
       recipient.publicKey,
       true
     );
     const createBurnerATAInstruction = Token.createAssociatedTokenAccountInstruction(
       ASSOCIATED_TOKEN_PROGRAM_ID,
       TOKEN_PROGRAM_ID,
-      mint.publicKey,
+      tokenGuardState.outMint,
       burnerATA,
       recipient.publicKey,
       provider.wallet.publicKey,

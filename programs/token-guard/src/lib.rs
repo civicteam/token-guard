@@ -1,13 +1,12 @@
 mod utils;
 
 use {
-  crate::utils::{assert_initialized, assert_owned_by, spl_token_transfer, TokenTransferParams},
+  crate::utils::{assert_initialized, assert_owned_by},
   anchor_lang::{
     prelude::*, solana_program::system_program, AnchorDeserialize, AnchorSerialize,
     Discriminator, Key,
   },
   anchor_spl::token::TokenAccount,
-  // arrayref::array_ref,
   solana_gateway::Gateway,
   spl_token::state::{Account, Mint},
   std::cell::Ref,
@@ -23,13 +22,11 @@ pub mod token_guard {
   use anchor_lang::{
     solana_program::{
       program_option::COption,
-      program::{invoke, invoke_signed},
+      program::{invoke},
       system_instruction
     }
   };
   use crate::utils::{spl_token_mint, TokenMintParams};
-
-
 
   pub fn initialize(ctx: Context<Initialize>, gatekeeper_network: Pubkey, mint_authority_bump: u8) -> ProgramResult {
     let token_guard = &mut ctx.accounts.token_guard;
@@ -68,30 +65,27 @@ pub mod token_guard {
 
   pub fn exchange(ctx: Context<Exchange>, lamports: u64) -> ProgramResult {
     let token_guard = &mut ctx.accounts.token_guard;
+    let clock = &ctx.accounts.clock;
 
-    // match candy_machine.data.go_live_date {
-    //   None => {
-    //     if *ctx.accounts.payer.key != candy_machine.authority {
-    //       return Err(ErrorCode::CandyMachineNotLiveYet.into());
-    //     }
-    //   }
-    //   Some(val) => {
-    //     if clock.unix_timestamp < val {
-    //       if *ctx.accounts.payer.key != candy_machine.authority {
-    //         return Err(ErrorCode::CandyMachineNotLiveYet.into());
-    //       }
-    //     }
-    //   }
-    // }
+    // Has the TokenGuard started?
+    if let Some(start_time) = token_guard.start_time {
+      if clock.unix_timestamp < start_time {
+        return Err(ErrorCode::NotLiveYet.into());
+      }
+    }
 
+    // Is the Gateway Token valid?
+    msg!("Verifying gateway token {} on network {} belongs to {}", ctx.accounts.gateway_token.key, token_guard.gatekeeper_network, ctx.accounts.payer.key());
+    Gateway::verify_gateway_token_account_info(&ctx.accounts.gateway_token,&ctx.accounts.payer.key(), &token_guard.gatekeeper_network)?;
 
-    //   // validate the gateway token
-    //   assert_eq!(ctx.remaining_accounts.len() > 0, true);
-    //   let last_account = ctx.remaining_accounts.last().unwrap();
-    //   verify_gateway_token(&ctx.accounts.payer, last_account, gatekeeper_network)?;
-
+    // Does the payer have enough funds?
     if ctx.accounts.payer.lamports() < lamports {
       return Err(ErrorCode::NotEnoughSOL.into());
+    }
+
+    // Is the payer's token account ephemeral?
+    if ctx.accounts.payer_ata.lamports() != 0 {
+      return Err(ErrorCode::TokenAccountNotEphemeral.into());
     }
 
     msg!("Sending {} lamports from {} to {}", lamports, ctx.accounts.payer.key, ctx.accounts.recipient.key);
@@ -121,7 +115,6 @@ pub mod token_guard {
       authority_signer_seeds: &[
         MINT_AUTHORITY_SEED,
         &ctx.accounts.token_guard.to_account_info().key.to_bytes(),
-        &ctx.program_id.clone().to_bytes(),
         &[ctx.accounts.token_guard.mint_authority_bump]
       ],
       token_program: ctx.accounts.token_program.clone(),
@@ -134,12 +127,12 @@ pub mod token_guard {
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-  #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 32 + 1)]
+  #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 32 + 1 + (1 + 8))]
   token_guard: ProgramAccount<'info, TokenGuard>,
   #[account(mut)]
   authority: Signer<'info>,
   #[account()]
-  // out_mint: ProgramAccount<'info, anchor_spl::token::Mint>,
+  // out_mint: ProgramAccount<'info, anchor_spl::token::Mint>, CPI ACCOUNT OR WHATEVER
   out_mint: AccountInfo<'info>,
   // #[account(seeds = [mint], bump=?, owner = anchor_spl::token::Mint)]
   #[account()]
@@ -164,8 +157,8 @@ pub struct Exchange<'info> {
   token_guard: ProgramAccount<'info, TokenGuard>,
   #[account(mut)]
   payer: Signer<'info>,
-  // #[account(seeds = [recipient, mint], bump=0, owner = anchor_spl::associated_token::AssociatedToken::id())]
-  #[account()]
+  // #[account(seeds = [payer, mint], bump=0, owner = anchor_spl::associated_token::AssociatedToken::id())]
+  #[account(mut)]
   payer_ata: AccountInfo<'info>,
   #[account(mut, address = token_guard.out_mint)]
   // out_mint: ProgramAccount<'info, anchor_spl::token::Mint>,
@@ -174,10 +167,15 @@ pub struct Exchange<'info> {
   recipient: AccountInfo<'info>,
   #[account()]
   mint_authority: AccountInfo<'info>,
+  #[account()]
+  // #[account(owner = GatewayProgram)]
+  // gateway_token: ProgramAccount<'info, GatewayProgram>,
+  gateway_token: AccountInfo<'info>,
   #[account(address = spl_token::id())]
   token_program: AccountInfo<'info>,
   #[account(address = system_program::ID)]
   system_program: AccountInfo<'info>,
+  clock: Sysvar<'info, Clock>,
 }
 
 
@@ -191,7 +189,7 @@ pub struct TokenGuard {
   pub out_mint: Pubkey,
   pub mint_authority_bump: u8,
   // pub in_mint: Option<Pubkey>,
-  // pub start_time: Option<i64>,
+  pub start_time: Option<i64>,  // i64 because that is the type of clock.unix_timestamp
   // pub max_amount: Option<u64>,
   // pub gt_expiry_tolerance: u32,
 }
@@ -212,4 +210,8 @@ pub enum ErrorCode {
   NotEnoughSOL,
   #[msg("Token transfer failed")]
   TokenTransferFailed,
+  #[msg("TokenGuard is not yet live")]
+  NotLiveYet,
+  #[msg("The payer's token account must be ephemeral (have zero lamports)")]
+  TokenAccountNotEphemeral
 }

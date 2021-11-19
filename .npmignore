@@ -3,3 +3,6 @@ migrations/
 .cache/
 .anchor/
 .git/
+node_modules/
+target/
+test-ledger/

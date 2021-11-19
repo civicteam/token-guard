@@ -1,16 +1,23 @@
-import * as chai from 'chai';
-import * as anchor from '@project-serum/anchor';
-import {BN, Program, web3} from '@project-serum/anchor';
-import {ASSOCIATED_TOKEN_PROGRAM_ID, MintLayout, Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
-import { TokenGuard } from '../target/types/token_guard';
-import {GatekeeperNetworkService, GatekeeperService} from "@identity.com/solana-gatekeeper-lib";
-import { GatewayToken } from '@identity.com/solana-gateway-ts';
-import { DummySpender } from '../target/types/dummy_spender';
-import {exchange, initialize, TokenGuardState} from "../src/";
+import * as chai from "chai";
+import * as anchor from "@project-serum/anchor";
+import { BN, Program, web3 } from "@project-serum/anchor";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  Token,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import { TokenGuard } from "../target/types/token_guard";
+import {
+  GatekeeperNetworkService,
+  GatekeeperService,
+} from "@identity.com/solana-gatekeeper-lib";
+import { GatewayToken } from "@identity.com/solana-gateway-ts";
+import { DummySpender } from "../target/types/dummy_spender";
+import { exchange, initialize, TokenGuardState } from "../src/";
 
 const { expect } = chai;
 
-describe('token-guard', () => {
+describe("token-guard", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.Provider.local();
   anchor.setProvider(provider);
@@ -45,63 +52,89 @@ describe('token-guard', () => {
   const exchangeAmount = 1_000;
   const topUpAmount = exchangeAmount + 10_000;
 
-  before('Set up the log listener for easier debugging', async () => {
-    listenerId = provider.connection.onLogs('all', console.log, 'confirmed');
-  })
+  before("Set up the log listener for easier debugging", async () => {
+    listenerId = provider.connection.onLogs("all", console.log, "confirmed");
+  });
 
-  before('Set up gatekeeper network and gateway token', async () => {
+  before("Set up gatekeeper network and gateway token", async () => {
     // fund the gatekeeper
     await provider.send(
-      new web3.Transaction().add(web3.SystemProgram.transfer({
-            fromPubkey: provider.wallet.publicKey,
-            toPubkey: gatekeeper.publicKey,
-            lamports: 5_000_000,
-          }
-        )
+      new web3.Transaction().add(
+        web3.SystemProgram.transfer({
+          fromPubkey: provider.wallet.publicKey,
+          toPubkey: gatekeeper.publicKey,
+          lamports: 5_000_000,
+        })
       )
     );
 
     // create a new gatekeeper network (no on-chain tx here)
-    const gknService = new GatekeeperNetworkService(provider.connection, gatekeeper, gatekeeperNetwork);
-    const gkService = new GatekeeperService(provider.connection, gatekeeper, gatekeeperNetwork.publicKey, gatekeeper);
+    const gknService = new GatekeeperNetworkService(
+      provider.connection,
+      gatekeeper,
+      gatekeeperNetwork
+    );
+    const gkService = new GatekeeperService(
+      provider.connection,
+      gatekeeper,
+      gatekeeperNetwork.publicKey,
+      gatekeeper
+    );
 
     // add the gatekeeper to this network
-    await gknService.addGatekeeper(gatekeeper.publicKey)
+    await gknService.addGatekeeper(gatekeeper.publicKey);
 
     // create a new gateway token
     gatewayToken = await gkService.issue(sender.publicKey);
 
     // fund the sender
     await provider.send(
-      new web3.Transaction().add(web3.SystemProgram.transfer({
+      new web3.Transaction().add(
+        web3.SystemProgram.transfer({
           fromPubkey: provider.wallet.publicKey,
           toPubkey: sender.publicKey,
           lamports: topUpAmount,
-        }
-      )));
-  })
+        })
+      )
+    );
+  });
 
-  after(() => provider.connection.removeOnLogsListener(listenerId))
+  after(() => provider.connection.removeOnLogsListener(listenerId));
 
-  it('initialises a new tokenGuard', async () => {
-    tokenGuardState = await initialize(program, provider, gatekeeperNetwork.publicKey, recipient.publicKey);
+  it("initialises a new tokenGuard", async () => {
+    tokenGuardState = await initialize(
+      program,
+      provider,
+      gatekeeperNetwork.publicKey,
+      recipient.publicKey
+    );
 
     console.log({
       tokenGuard: tokenGuardState.id.toString(),
       mint: tokenGuardState.outMint.toString(),
       recipient: recipient.publicKey.toString(),
-      sender: sender.publicKey.toString()
+      sender: sender.publicKey.toString(),
     });
 
-    tokenGuardAccount = await program.account.tokenGuard.fetch(tokenGuardState.id);
+    tokenGuardAccount = await program.account.tokenGuard.fetch(
+      tokenGuardState.id
+    );
 
-    expect(tokenGuardAccount.recipient.toString()).to.equal(recipient.publicKey.toString())
-    expect(tokenGuardAccount.outMint.toString()).to.equal(tokenGuardState.outMint.toString())
-    expect(tokenGuardAccount.authority.toString()).to.equal(provider.wallet.publicKey.toString())
-    expect(tokenGuardAccount.gatekeeperNetwork.toString()).to.equal(gatekeeperNetwork.publicKey.toString())
+    expect(tokenGuardAccount.recipient.toString()).to.equal(
+      recipient.publicKey.toString()
+    );
+    expect(tokenGuardAccount.outMint.toString()).to.equal(
+      tokenGuardState.outMint.toString()
+    );
+    expect(tokenGuardAccount.authority.toString()).to.equal(
+      provider.wallet.publicKey.toString()
+    );
+    expect(tokenGuardAccount.gatekeeperNetwork.toString()).to.equal(
+      gatekeeperNetwork.publicKey.toString()
+    );
   });
 
-  it('exchanges sol for tokens', async () => {
+  it("exchanges sol for tokens", async () => {
     senderAta = await Token.getAssociatedTokenAddress(
       ASSOCIATED_TOKEN_PROGRAM_ID,
       TOKEN_PROGRAM_ID,
@@ -112,12 +145,14 @@ describe('token-guard', () => {
 
     // fund the sender
     await provider.send(
-      new web3.Transaction().add(web3.SystemProgram.transfer({
+      new web3.Transaction().add(
+        web3.SystemProgram.transfer({
           fromPubkey: provider.wallet.publicKey,
           toPubkey: sender.publicKey,
           lamports: topUpAmount,
-        }
-      )));
+        })
+      )
+    );
 
     // sender exchanges sol for tokens
     const txSig = await program.rpc.exchange(new BN(exchangeAmount), {
@@ -131,17 +166,17 @@ describe('token-guard', () => {
         gatewayToken: gatewayToken.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
-        clock: web3.SYSVAR_CLOCK_PUBKEY
+        clock: web3.SYSVAR_CLOCK_PUBKEY,
       },
       signers: [sender],
-      instructions:  [
+      instructions: [
         Token.createAssociatedTokenAccountInstruction(
           ASSOCIATED_TOKEN_PROGRAM_ID,
           TOKEN_PROGRAM_ID,
           tokenGuardAccount.outMint,
           senderAta,
           sender.publicKey,
-          provider.wallet.publicKey,
+          provider.wallet.publicKey
         ),
         Token.createCloseAccountInstruction(
           TOKEN_PROGRAM_ID,
@@ -149,30 +184,36 @@ describe('token-guard', () => {
           sender.publicKey,
           sender.publicKey,
           []
-        )
-      ]
+        ),
+      ],
     });
 
-    await provider.connection.confirmTransaction(txSig, 'finalized')
+    await provider.connection.confirmTransaction(txSig, "finalized");
 
     console.log(await provider.connection.getBalance(sender.publicKey));
 
-    const balance = await provider.connection.getBalance(recipient.publicKey, 'confirmed');
+    const balance = await provider.connection.getBalance(
+      recipient.publicKey,
+      "confirmed"
+    );
     console.log(`balance for ${recipient.publicKey} ${balance}`);
 
     // for some reason, although the tx says the SOL is transferred, it is not registering in the recipient's account
     // expect(balance).to.equal(exchange_amount);
 
     // the sender's ATA should be closed, as it is ephemeral
-    const senderAtaInfo = await provider.connection.getParsedAccountInfo(senderAta)
+    const senderAtaInfo = await provider.connection.getParsedAccountInfo(
+      senderAta
+    );
     expect(senderAtaInfo.value).to.be.null;
     // const parsedAccountInfo = (senderAtaInfo.value.data as web3.ParsedAccountData).parsed;
     // console.log(parsedAccountInfo);
     // expect(parsedAccountInfo.info.tokenAmount.amount).to.equal(''+exchange_amount)
   });
 
-  it('spends tokens in a separate program', async () => {
-    const spenderProgram = anchor.workspace.DummySpender as Program<DummySpender>;
+  it("spends tokens in a separate program", async () => {
+    const spenderProgram = anchor.workspace
+      .DummySpender as Program<DummySpender>;
 
     const tokenGuardInstructions = await exchange(
       program,
@@ -190,14 +231,15 @@ describe('token-guard', () => {
       recipient.publicKey,
       true
     );
-    const createBurnerATAInstruction = Token.createAssociatedTokenAccountInstruction(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      tokenGuardState.outMint,
-      burnerATA,
-      recipient.publicKey,
-      provider.wallet.publicKey,
-    );
+    const createBurnerATAInstruction =
+      Token.createAssociatedTokenAccountInstruction(
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
+        tokenGuardState.outMint,
+        burnerATA,
+        recipient.publicKey,
+        provider.wallet.publicKey
+      );
     await spenderProgram.rpc.spend(new BN(exchangeAmount), {
       accounts: {
         payer: sender.publicKey,
@@ -206,10 +248,7 @@ describe('token-guard', () => {
         tokenProgram: TOKEN_PROGRAM_ID,
       },
       signers: [sender],
-      instructions: [
-        createBurnerATAInstruction,
-        ...tokenGuardInstructions
-      ]
+      instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
     });
-  })
+  });
 });

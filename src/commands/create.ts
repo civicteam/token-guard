@@ -39,13 +39,14 @@ TokenGuard created.
     );
 
     this.log(
-      `TokenGuard created. ID: ${tokenGuardState.id}
+      `TokenGuard created.
+ID: ${tokenGuardState.id}
+Mint: ${tokenGuardState.outMint}
 
-Details:
+Additional Details:
 
 GatekeeperNetwork: ${tokenGuardState.gatekeeperNetwork}
 Recipient: ${tokenGuardState.recipient}
-Mint: ${tokenGuardState.outMint}
 MintAuthority: ${tokenGuardState.mintAuthority}`
     );
   }

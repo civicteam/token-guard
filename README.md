@@ -1,21 +1,22 @@
-# token-guard
-A composable gateway program for Solana dApps written in Anchor.
+# Token Guard 
 
-With TokenGuard, dapp developers can protect access to any dApp that
+A composable [gateway](https://docs.civic.com) program for Solana dApps written in Anchor
+and using [Civic Pass](https://www.civic.com).
+
+With TokenGuard, dApp developers can protect access to any dApp that
 accepts tokens as payment, such as a Metaplex CandyMachine mint,
-CandyMachine mint without requiring any on-chain smart-contract changes.
+without requiring any on-chain smart-contract changes.
 
 NOTE: TokenGuard is currently in beta on devnet only and is unaudited.
 
-Devnet address: `tg7bdEQom2SZT1JB2d77RDJFYaL4eZ2FcM8HZZAg5Z8`
-
 ## How it works
 
-Let's say you want to set up a CandyMachine that mints NFTs at x Sol each.
+Let's say you want to set up a CandyMachine that mints NFTs at x Sol each,
+and you want to restrict purchase only to holders of a valid [Civic Pass](https://www.civic.com).
 
 1. Set up a TokenGuard that exchanges Sol for a new token T,
 created by TokenGuard (the mint authority is a PDA owned by TokenGuard),
-if the user has a valid Civic Pass gateway token.
+if the user has a valid Civic Pass.
 
 2. Set up a CandyMachine that accepts token T instead of Sol
 
@@ -28,13 +29,19 @@ Note: the equivalent pattern applies to other protocols.
 ## Coming Soon
 
 [ ] Support for SPL Token
-[ ] Support for membership tokens, (non-consumed tokens)
+
+[ ] Support for membership tokens (non-consumed tokens)
+
 [ ] Mainnet deployment
+
 [ ] Audit
 
 ## Usage
 
-Example: CandyMachine
+Example: CandyMachine using the dummy Civic Pass:
+"tgnuXXNMDLK8dy7Xm1TdeGyc95MDym4bvAQCwcW21Bf"
+
+Get the real civic pass address from https://docs.civic.com
 
 ## 1. Create a TokenGuard
 
@@ -45,12 +52,6 @@ TokenGuard created
 
 ID: FeHQD2mEHScoznRZQHFGTtTZALfPpDLCx8Pg4HyDYVwy
 Mint: 6zV7KfgzuNHTEm922juUSFwGJ472Kx6w8J7Gf6kAYuzh
-      
-Additional Details:
-
-GatekeeperNetwork: tgnuXXNMDLK8dy7Xm1TdeGyc95MDym4bvAQCwcW21Bf
-Recipient: 48V9nmW9awiR9BmihdGhUL3ZpYJ8MCgGeUoSWbtqjicv
-MintAuthority: JBS8QmUbFADgnU4MVDtZV1pzSfrV96L3gUfjZy45Aff6
 ```
 
 ## 2. Add a Token Account for the mint
@@ -95,7 +96,7 @@ Quickstart:
 ```js
 import {findGatewayToken} from "@identity.com/solana-gateway-ts";
 
-// Get the gatekeeper network address from https://docs.civic.com
+const gatekeeperNetwork = new PublicKey("tgnuXXNMDLK8dy7Xm1TdeGyc95MDym4bvAQCwcW21Bf");
 const foundToken = await findGatewayToken(connection, wallet.publicKey, gatekeeperNetwork);
 ```
 
@@ -141,3 +142,32 @@ $ anchor build
 $ anchor deploy
 $ anchor idl init
 ```
+
+## FAQ
+
+#### Q: How does this protect against bots? Couldn't I just execute exchange up-front to mint loads of T and then share them with bot accounts?
+
+Four factors mitigate against that:
+- The TokenGuard will mint only x token T per tx
+- The TokenGuard will only mint tokens to an ephemeral token account (one with zero lamports, that will be garbage-collected after the transaction)
+- The TokenGuard will only mint tokens after a specific go-live date
+- (Not yet implemented) The TokenGuard would possibly only mint tokens if the tx also contains a specific instruction (e.g. a candymachine mint instruction)
+
+#### Q: Why not just add the gateway token check inside the smart contract being guarded (e.g. Candy Machine)?
+
+Both are good options. In fact, if you prefer that model, we have forks for
+Metaplex [CandyMachine](https://github.com/civicteam/metaplex/pull/5) 
+and [Auction contract](https://github.com/civicteam/metaplex/pull/1) that do that.
+
+This option is potentially more flexible, as it can protect any kind of similar on-chain protocol,
+without requiring each protocol to change to validate gateway tokens.
+
+#### Q: What about if my protocol accepts an SPL Token instead of Sol?
+
+The pattern still works, just switch Sol for your token in the explanation above.
+
+#### Q: It looks like TokenGuard is now paying into the Treasury, not my smart contract? What happens if something goes wrong and the buyer has paid the Sol but the smart contract instruction fails?
+
+This is where the beauty of the atomic Solana transaction model comes in.
+If the TokenGuard exchange and smart contract instructions are in the same transaction,
+and one fails, the whole thing is rolled back and the buyer does not lose Sol.

@@ -5,6 +5,8 @@ import { TokenGuard } from "../../target/types/token_guard";
 import { Program, web3 } from "@project-serum/anchor";
 import { deriveMintAuthority, TokenGuardState } from "./util";
 
+const DECIMALS = 9; // lamports in 1 sol
+
 export const initialize = async (
   program: Program<TokenGuard>,
   provider: anchor.Provider,
@@ -43,7 +45,7 @@ export const initialize = async (
       Token.createInitMintInstruction(
         TOKEN_PROGRAM_ID,
         mint.publicKey,
-        0,
+        DECIMALS,
         mintAuthority,
         mintAuthority
       ),

@@ -41,7 +41,7 @@ describe("token-guard", () => {
   let senderAta: web3.PublicKey;
 
   // The account on chain that contains the token guard information
-  let tokenGuardAccount;
+  let tokenGuardAccount: any;
   // The result of the initialize function call. Essentially the same information as tokenGuardAccount
   // plus the tokenGuard public key.
   let tokenGuardState: TokenGuardState;
@@ -216,11 +216,12 @@ describe("token-guard", () => {
       .DummySpender as Program<DummySpender>;
 
     const tokenGuardInstructions = await exchange(
+      provider.connection,
       program,
       tokenGuardState.id,
       sender.publicKey,
       provider.wallet.publicKey,
-      gatewayToken.publicKey,
+      gatekeeperNetwork.publicKey,
       exchangeAmount
     );
 
@@ -240,6 +241,7 @@ describe("token-guard", () => {
         recipient.publicKey,
         provider.wallet.publicKey
       );
+
     await spenderProgram.rpc.spend(new BN(exchangeAmount), {
       accounts: {
         payer: sender.publicKey,

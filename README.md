@@ -28,7 +28,7 @@ Note: the equivalent pattern applies to other protocols.
 
 ## Coming Soon
 
-[ ] Support for SPL Token
+[ ] Support for SPL Token (accept SPL instead of Sol)
 
 [ ] Support for membership tokens (non-consumed tokens)
 
@@ -113,11 +113,12 @@ import * as TokenGuard from "@civic/token-guard";
 const tokenGuard = new PublicKey("<ID from step 1>")
 const program = await TokenGuard.fetchProgram(provider)
 const instructions = await TokenGuard.exchange(
+    connection,
     program,
     tokenGuard,
     payer,
     payer,
-    gatewayToken,
+    gatekeeperNetwork,
     amount
   );
 
@@ -164,7 +165,7 @@ without requiring each protocol to change to validate gateway tokens.
 
 #### Q: What about if my protocol accepts an SPL Token instead of Sol?
 
-The pattern still works, just switch Sol for your token in the explanation above.
+TokenGuard support for SPL Token is in the roadmap.
 
 #### Q: It looks like TokenGuard is now paying into the Treasury, not my smart contract? What happens if something goes wrong and the buyer has paid the Sol but the smart contract instruction fails?
 

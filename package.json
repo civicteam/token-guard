@@ -1,15 +1,16 @@
 {
   "name": "@civic/token-guard",
   "description": "Client SDK for the TokenGuard Solana program",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "author": "dankelleher @dankelleher",
   "bugs": "https://github.com/civicteam/token-guard/issues",
   "license": "MIT",
   "dependencies": {
+    "@identity.com/solana-gateway-ts": "^0.3.3",
     "@oclif/command": "^1.8.3",
     "@oclif/config": "^1.17.1",
     "@oclif/plugin-help": "^3.2.5",
-    "@project-serum/anchor": "^0.18.0",
+    "@project-serum/anchor": "^0.18.2",
     "@solana/spl-token": "^0.1.8",
     "oclif": "^1.18.1",
     "tslib": "^2.3.1"
@@ -41,7 +42,7 @@
   ],
   "oclif": {
     "commands": "./dist/src/commands",
-    "bin": "tokenguard",
+    "bin": "token-guard",
     "plugins": [
       "@oclif/plugin-help"
     ]
@@ -51,6 +52,7 @@
     "build": "yarn clean && yarn compile",
     "clean": "rimraf -rf ./dist",
     "compile": "tsc -p tsconfig.json",
-    "prepare": "yarn build"
+    "prepare": "yarn build",
+    "lint": "yarn eslint src/ tests/ --ext ts"
   }
 }

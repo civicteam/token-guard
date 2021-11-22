@@ -293,7 +293,7 @@
     borsh "^0.4.0"
     tslib "^1"
 
-"@identity.com/solana-gateway-ts@^0.3.0":
+"@identity.com/solana-gateway-ts@^0.3.0", "@identity.com/solana-gateway-ts@^0.3.3":
   version "0.3.3"
   resolved "https://registry.yarnpkg.com/@identity.com/solana-gateway-ts/-/solana-gateway-ts-0.3.3.tgz#bb9ab03c57d39cd10f4a1f0a214e9b230f21cb91"
   integrity sha512-lpFQZ8WDbPecorA0iNrsGVwPkkp1F4j56r51qKHEfARNKpeeRcNnutBfDxVVIWpV6oKL9yRPsbpwpa41tQ8YcQ==
@@ -523,10 +523,10 @@
   resolved "https://registry.yarnpkg.com/@oclif/screen/-/screen-1.0.4.tgz#b740f68609dfae8aa71c3a6cab15d816407ba493"
   integrity sha512-60CHpq+eqnTxLZQ4PGHYNwUX572hgpMHGPtTWMjdTMsAvlm69lZV/4ly6O3sAYkomo4NggGcomrDpBe34rxUqw==
 
-"@project-serum/anchor@^0.18.0":
-  version "0.18.0"
-  resolved "https://registry.npmjs.org/@project-serum/anchor/-/anchor-0.18.0.tgz"
-  integrity sha512-WTm+UB93MoxyCbjnHIibv/uUEoO/5gL4GEtE/aMioLF8Z4i0vCMPnvAN0xpk9VBu3t7ld2DcCE/L+6Z7dwU++w==
+"@project-serum/anchor@^0.18.2":
+  version "0.18.2"
+  resolved "https://registry.yarnpkg.com/@project-serum/anchor/-/anchor-0.18.2.tgz#0f13b5c2046446b7c24cf28763eec90febb28485"
+  integrity sha512-uyjiN/3Ipp+4hrZRm/hG18HzGLZyvP790LXrCsGO3IWxSl28YRhiGEpKnZycfMW94R7nxdUoE3wY67V+ZHSQBQ==
   dependencies:
     "@project-serum/borsh" "^0.2.2"
     "@solana/web3.js" "^1.17.0"

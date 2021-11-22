@@ -50,11 +50,14 @@ export const fetchProgram = async (
 };
 
 export const getTokenGuardState = async (
-  anchorWallet: Wallet,
   tokenGuardId: anchor.web3.PublicKey,
   connection: anchor.web3.Connection
 ): Promise<TokenGuardState> => {
-  const provider = new anchor.Provider(connection, anchorWallet, {
+  // anchor needs a wallet, even if we are just doing a lookup query,
+  // so we create a dummy wallet here
+  const dummyWallet = new anchor.Wallet(anchor.web3.Keypair.generate());
+
+  const provider = new anchor.Provider(connection, dummyWallet, {
     preflightCommitment: "recent",
   });
 

@@ -1,6 +1,7 @@
 import * as chai from "chai";
+import chaiAsPromised from "chai-as-promised";
 import * as anchor from "@project-serum/anchor";
-import { BN, Program, web3 } from "@project-serum/anchor";
+import { BN, Program, Provider, web3 } from "@project-serum/anchor";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   Token,
@@ -15,7 +16,32 @@ import { GatewayToken } from "@identity.com/solana-gateway-ts";
 import { DummySpender } from "../target/types/dummy_spender";
 import { exchange, initialize, TokenGuardState } from "../src/";
 
+chai.use(chaiAsPromised);
 const { expect } = chai;
+
+const createBurnerATA = async (
+  tokenGuardState: TokenGuardState,
+  recipient: web3.Keypair,
+  provider: Provider
+) => {
+  const burnerATA = await Token.getAssociatedTokenAddress(
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
+    tokenGuardState.outMint,
+    recipient.publicKey,
+    true
+  );
+  const createBurnerATAInstruction =
+    Token.createAssociatedTokenAccountInstruction(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      tokenGuardState.outMint,
+      burnerATA,
+      recipient.publicKey,
+      provider.wallet.publicKey
+    );
+  return { burnerATA, createBurnerATAInstruction };
+};
 
 describe("token-guard", () => {
   // Configure the client to use the local cluster.
@@ -225,22 +251,11 @@ describe("token-guard", () => {
       exchangeAmount
     );
 
-    const burnerATA = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      tokenGuardState.outMint,
-      recipient.publicKey,
-      true
+    const { burnerATA, createBurnerATAInstruction } = await createBurnerATA(
+      tokenGuardState,
+      recipient,
+      provider
     );
-    const createBurnerATAInstruction =
-      Token.createAssociatedTokenAccountInstruction(
-        ASSOCIATED_TOKEN_PROGRAM_ID,
-        TOKEN_PROGRAM_ID,
-        tokenGuardState.outMint,
-        burnerATA,
-        recipient.publicKey,
-        provider.wallet.publicKey
-      );
 
     await spenderProgram.rpc.spend(new BN(exchangeAmount), {
       accounts: {
@@ -252,5 +267,51 @@ describe("token-guard", () => {
       signers: [sender],
       instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
     });
+  });
+
+  it("initialises a tokenGuard that is not yet live", async () => {
+    tokenGuardState = await initialize(
+      program,
+      provider,
+      gatekeeperNetwork.publicKey,
+      recipient.publicKey,
+      Date.now() + 1_000_000
+    );
+  });
+
+  it("fails to spend tokens if the tokenGuard is not ready", async () => {
+    const spenderProgram = anchor.workspace
+      .DummySpender as Program<DummySpender>;
+
+    const tokenGuardInstructions = await exchange(
+      provider.connection,
+      program,
+      tokenGuardState.id,
+      sender.publicKey,
+      provider.wallet.publicKey,
+      gatekeeperNetwork.publicKey,
+      exchangeAmount
+    );
+
+    const { burnerATA, createBurnerATAInstruction } = await createBurnerATA(
+      tokenGuardState,
+      recipient,
+      provider
+    );
+
+    const shouldFail = spenderProgram.rpc.spend(new BN(exchangeAmount), {
+      accounts: {
+        payer: sender.publicKey,
+        payerAta: senderAta,
+        recipient: burnerATA,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      signers: [sender],
+      instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
+    });
+
+    return expect(shouldFail).to.be.rejectedWith(
+      /Transaction simulation failed/
+    );
   });
 });

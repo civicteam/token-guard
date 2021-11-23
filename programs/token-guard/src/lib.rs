@@ -26,6 +26,7 @@ pub mod token_guard {
     ctx: Context<Initialize>,
     gatekeeper_network: Pubkey,
     mint_authority_bump: u8,
+    start_time: Option<i64>
   ) -> ProgramResult {
     let token_guard = &mut ctx.accounts.token_guard;
 
@@ -57,6 +58,7 @@ pub mod token_guard {
     token_guard.recipient = *ctx.accounts.recipient.key;
     // token_guard.recipient_ata = *ctx.accounts.recipient_ata.key;
     token_guard.out_mint = *ctx.accounts.out_mint.key;
+    token_guard.start_time = start_time;
 
     Ok(())
   }
@@ -68,6 +70,7 @@ pub mod token_guard {
     // Has the TokenGuard started?
     if let Some(start_time) = token_guard.start_time {
       if clock.unix_timestamp < start_time {
+        msg!("Not live yet");
         return Err(ErrorCode::NotLiveYet.into());
       }
     }

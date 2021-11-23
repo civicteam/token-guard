@@ -29,3 +29,14 @@ export const clusterFlag = flags.build<ExtendedCluster>({
   description:
     "The cluster to target: mainnet-beta, testnet, devnet, civicnet, localnet. Alternatively, set the environment variable SOLANA_CLUSTER",
 });
+
+export const startTimeFlag = flags.build<number>({
+  char: "l",
+  parse: (timestampOrNow: string) => {
+    if (timestampOrNow === "now") {
+      return Date.now();
+    }
+    return parseInt(timestampOrNow, 10);
+  },
+  description: "An optional timestamp at which to enable the token guard",
+});

@@ -1,7 +1,7 @@
 {
   "name": "@civic/token-guard",
   "description": "Client SDK for the TokenGuard Solana program",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "author": "dankelleher @dankelleher",
   "bugs": "https://github.com/civicteam/token-guard/issues",
   "license": "MIT",
@@ -24,6 +24,7 @@
     "@typescript-eslint/eslint-plugin": "^5.4.0",
     "@typescript-eslint/parser": "^5.4.0",
     "chai": "^4.3.4",
+    "chai-as-promised": "^7.1.1",
     "eslint": "^8.2.0",
     "eslint-config-oclif": "^4.0.0",
     "eslint-config-oclif-typescript": "^1.0.2",
@@ -38,8 +39,12 @@
     "typescript": "^4.5.2"
   },
   "files": [
-    "dist/**/*"
+    "dist/**/*",
+    "bin/**/*"
   ],
+  "bin": {
+    "token-guard": "./bin/run"
+  },
   "oclif": {
     "commands": "./dist/src/commands",
     "bin": "token-guard",
@@ -49,6 +54,8 @@
   },
   "main": "dist/src/index.js",
   "scripts": {
+    "postpack": "rm -f oclif.manifest.json",
+    "prepack": "rm -rf dist && tsc -b && oclif-dev manifest && oclif-dev readme",
     "build": "yarn clean && yarn compile",
     "clean": "rimraf -rf ./dist",
     "compile": "tsc -p tsconfig.json",

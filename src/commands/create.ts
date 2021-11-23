@@ -3,6 +3,7 @@ import { initialize } from "../lib/initialize";
 import {
   clusterFlag,
   gatekeeperNetworkPubkeyFlag,
+  startTimeFlag,
   recipientPubkeyFlag,
 } from "../lib/cli/flags";
 import { fetchProgram } from "../lib/util";
@@ -22,6 +23,7 @@ TokenGuard created.
     recipientKey: recipientPubkeyFlag(),
     gatekeeperNetworkKey: gatekeeperNetworkPubkeyFlag(),
     cluster: clusterFlag(),
+    startTime: startTimeFlag(),
   };
 
   static args = [];
@@ -35,7 +37,8 @@ TokenGuard created.
       program,
       provider,
       flags.gatekeeperNetworkKey,
-      flags.recipientKey
+      flags.recipientKey,
+      flags.startTime
     );
 
     this.log(

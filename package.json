@@ -1,7 +1,7 @@
 {
   "name": "@civic/token-guard",
   "description": "Client SDK for the TokenGuard Solana program",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "author": "dankelleher @dankelleher",
   "repository": "https://github.com/civicteam/token-guard",
   "homepage": "https://civicteam.github.io/token-guard/",

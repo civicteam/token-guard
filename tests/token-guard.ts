@@ -314,25 +314,6 @@ describe("token-guard", () => {
   });
 
   it("fails to exchange three times for the same user", async () => {
-    senderAta = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      tokenGuardState.outMint,
-      sender.publicKey,
-      true
-    );
-
-    // fund the sender
-    await provider.send(
-      new web3.Transaction().add(
-        web3.SystemProgram.transfer({
-          fromPubkey: provider.wallet.publicKey,
-          toPubkey: sender.publicKey,
-          lamports: topUpAmount,
-        })
-      )
-    );
-
     const instructions = await exchange(
       provider.connection,
       program,
@@ -351,6 +332,49 @@ describe("token-guard", () => {
 
     console.log("Third exchange");
     const shouldFail = sendTransactionFromSender(instructions);
+    return expect(shouldFail).to.be.rejectedWith(
+      /Transaction simulation failed/
+    );
+  });
+
+  it("initialises a tokenGuard with a max amount", async () => {
+    tokenGuardState = await initialize(
+      program,
+      provider,
+      gatekeeperNetwork.publicKey,
+      recipient.publicKey,
+      undefined,
+      undefined,
+      exchangeAmount - 100 // smaller than the exchange amount
+    );
+  });
+
+  it("fails to exchange if the value is too high", async () => {
+    const instructionsForAnExchangeThatIsTooBig = await exchange(
+      provider.connection,
+      program,
+      tokenGuardState.id,
+      sender.publicKey,
+      sender.publicKey,
+      gatekeeperNetwork.publicKey,
+      exchangeAmount
+    );
+
+    const instructionsForAnExchangeThatIsSmallEnough = await exchange(
+      provider.connection,
+      program,
+      tokenGuardState.id,
+      sender.publicKey,
+      sender.publicKey,
+      gatekeeperNetwork.publicKey,
+      exchangeAmount - 100
+    );
+
+    await sendTransactionFromSender(instructionsForAnExchangeThatIsSmallEnough);
+
+    const shouldFail = sendTransactionFromSender(
+      instructionsForAnExchangeThatIsTooBig
+    );
     return expect(shouldFail).to.be.rejectedWith(
       /Transaction simulation failed/
     );

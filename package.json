@@ -3,6 +3,8 @@
   "description": "Client SDK for the TokenGuard Solana program",
   "version": "0.0.7",
   "author": "dankelleher @dankelleher",
+  "repository": "https://github.com/civicteam/token-guard",
+  "homepage": "https://civicteam.github.io/token-guard/",
   "bugs": "https://github.com/civicteam/token-guard/issues",
   "license": "MIT",
   "dependencies": {
@@ -60,6 +62,7 @@
     "clean": "rimraf -rf ./dist",
     "compile": "tsc -p tsconfig.json",
     "prepare": "yarn build",
-    "lint": "yarn eslint src/ tests/ --ext ts"
+    "lint": "yarn eslint src/ tests/ --ext ts",
+    "test": "anchor test"
   }
 }

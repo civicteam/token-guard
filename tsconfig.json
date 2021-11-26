@@ -22,7 +22,6 @@
     "target/types/token_guard.ts"
   ],
   "exclude": [
-    "test/**/*",
     "node_modules",
     "dist"
   ]

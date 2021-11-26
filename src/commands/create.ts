@@ -13,7 +13,7 @@ export default class Create extends Command {
   static description = "Create a TokenGuard";
 
   static examples = [
-    `$ tokenguard create -r
+    `$ token-guard create -r
 TokenGuard created.
 `,
   ];

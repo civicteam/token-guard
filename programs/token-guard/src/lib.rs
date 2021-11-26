@@ -13,20 +13,25 @@ use {
 declare_id!("tg7bdEQom2SZT1JB2d77RDJFYaL4eZ2FcM8HZZAg5Z8");
 
 const MINT_AUTHORITY_SEED: &[u8; 30] = br"token_guard_out_mint_authority";
+const ALLOWANCE_ACCOUNT_SEED: &[u8; 29] = br"token_guard_allowance_account";
 
 #[program]
 pub mod token_guard {
+  use std::borrow::{BorrowMut};
+  use std::io::Write;
   use super::*;
   use crate::utils::{spl_token_mint, TokenMintParams};
   use anchor_lang::solana_program::{
     program::invoke, program_option::COption, system_instruction,
   };
+  use anchor_lang::solana_program::program::invoke_signed;
 
   pub fn initialize(
     ctx: Context<Initialize>,
     gatekeeper_network: Pubkey,
     mint_authority_bump: u8,
-    start_time: Option<i64>
+    start_time: Option<i64>,
+    allowance: Option<u8>,
   ) -> ProgramResult {
     let token_guard = &mut ctx.accounts.token_guard;
 
@@ -59,12 +64,17 @@ pub mod token_guard {
     // token_guard.recipient_ata = *ctx.accounts.recipient_ata.key;
     token_guard.out_mint = *ctx.accounts.out_mint.key;
     token_guard.start_time = start_time;
+    // store zero as the "no allowance" rather than the extra byte an optional would require
+    token_guard.allowance = allowance.unwrap_or_default();
 
     Ok(())
   }
 
-  pub fn exchange(ctx: Context<Exchange>, lamports: u64) -> ProgramResult {
-    let token_guard = &mut ctx.accounts.token_guard;
+  pub fn exchange(ctx: Context<Exchange>, lamports: u64, allowance_account_bump: u8) -> ProgramResult {
+    msg!("exchange");
+    let token_guard = &ctx.accounts.token_guard;
+    let allowance_account = &mut ctx.accounts.allowance_account;
+
     let clock = &ctx.accounts.clock;
 
     // Has the TokenGuard started?
@@ -99,6 +109,58 @@ pub mod token_guard {
     if ctx.accounts.payer_ata.lamports() != 0 {
       msg!("Token account is not ephemeral - has {} lamports", ctx.accounts.payer_ata.lamports());
       return Err(ErrorCode::TokenAccountNotEphemeral.into());
+    }
+
+    // Does the payer have a remaining allowance?
+    msg!("Checking allowance");
+    if token_guard.allowance > 0 {
+      // token guard has an allowance requirement
+      // if the allowance account does not exist, create it
+      // if it exists, check if the value is already equal to the token guard allowance,
+      // if so, error out, if not, increment it
+      if allowance_account.owner == &id() {
+        let mut allowance_program_account: ProgramAccount<AllowanceAccount> = ProgramAccount::try_from(&id(), allowance_account)?;
+        if allowance_program_account.amount >= token_guard.allowance {
+          msg!("Allowance of {} reached", allowance_program_account.amount);
+          return Err(ErrorCode::AllowanceExceeded.into());
+        } else {
+          allowance_program_account.amount = allowance_program_account.amount + 1;
+          allowance_program_account.exit(&id());
+        }
+      } else {
+        let size = (1 + 8) as usize;
+        // should match deriveAllowanceAccount in the client
+        let allowance_account_signer_seeds: &[&[_]] = &[
+          ALLOWANCE_ACCOUNT_SEED,
+          &ctx.accounts.token_guard.key().to_bytes(),
+          &ctx.accounts.payer.key.to_bytes(),
+          &[allowance_account_bump],
+        ];
+
+        invoke_signed(
+          &system_instruction::create_account(
+            ctx.accounts.payer.key,
+            allowance_account.borrow_mut().key,
+            1.max(ctx.accounts.rent.minimum_balance(size)),
+            size as u64,
+            &id(),
+          ),
+          &[
+            ctx.accounts.payer.to_account_info().clone(),
+            allowance_account.to_account_info().clone(),
+            ctx.accounts.system_program.clone(),
+          ],
+          &[allowance_account_signer_seeds],
+        )?;
+
+        let allowance: AllowanceAccount = AllowanceAccount { amount: 1 };
+        let info = allowance_account.to_account_info();
+        let mut data = info.try_borrow_mut_data()?;
+        let dst: &mut [u8] = &mut data;
+        let mut cursor = std::io::Cursor::new(dst);
+
+        allowance.try_serialize(&mut cursor)?
+      }
     }
 
     msg!(
@@ -145,7 +207,7 @@ pub mod token_guard {
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-  #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 32 + 1 + (1 + 8))]
+  #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 32 + 1 + (1 + 8) + 1)]
   token_guard: ProgramAccount<'info, TokenGuard>,
   #[account(mut)]
   authority: Signer<'info>,
@@ -165,6 +227,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(amount: u64, allowance_account_bump: u8)]
 pub struct Exchange<'info> {
   #[account(
   // has_one = out_mint,
@@ -189,11 +252,28 @@ pub struct Exchange<'info> {
   // #[account(owner = GatewayProgram)]
   // gateway_token: ProgramAccount<'info, GatewayProgram>,
   gateway_token: AccountInfo<'info>,
+  // Anchor does not (yet) support conditional initialisation in the macros,
+  // so we initialise the allowance account the old-fashioned way.
+  // #[account(
+  //   init = token_guard.allowance > 0,
+  //   payer = payer,
+  //   space = 8 + 1,  // 1 byte for the amount, 8 for metadata needed for all accounts
+  //   // should match deriveAllowanceAccount in the client
+  //   seeds=[
+  //     ALLOWANCE_ACCOUNT_SEED.as_bytes(),
+  //     token_guard.key().as_ref(),
+  //     payer.key.as_ref(),
+  //   ],
+  //   bump=allowance_account_bump,
+  // )]
+  #[account(mut)]
+  allowance_account: AccountInfo<'info>,//ProgramAccount<'info, AllowanceAccount>,
   #[account(address = spl_token::id())]
   token_program: AccountInfo<'info>,
   #[account(address = system_program::ID)]
   system_program: AccountInfo<'info>,
   clock: Sysvar<'info, Clock>,
+  rent: Sysvar<'info, Rent>,
 }
 
 #[account]
@@ -209,6 +289,13 @@ pub struct TokenGuard {
   pub start_time: Option<i64>, // i64 because that is the type of clock.unix_timestamp
   // pub max_amount: Option<u64>,
   // pub gt_expiry_tolerance: u32,
+  pub allowance: u8,
+}
+
+#[account]
+#[derive(Default)]
+pub struct AllowanceAccount {
+  pub amount: u8,
 }
 
 #[error]
@@ -231,4 +318,6 @@ pub enum ErrorCode {
   NotLiveYet,
   #[msg("The payer's token account must be ephemeral (have zero lamports)")]
   TokenAccountNotEphemeral,
+  #[msg("The payer already has made the allowed amount of purchases with this TokenGuard")]
+  AllowanceExceeded,
 }

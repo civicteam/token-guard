@@ -1,6 +1,7 @@
 # Token Guard 
 
-A composable [gateway](https://docs.civic.com) program for Solana dApps written in Anchor
+A composable [gateway](https://docs.civic.com) program for Solana dApps written in
+[Anchor](https://github.com/project-serum/anchor)
 and using [Civic Pass](https://www.civic.com).
 
 With TokenGuard, dApp developers can protect access to any dApp that
@@ -8,6 +9,13 @@ accepts tokens as payment, such as a Metaplex CandyMachine mint,
 without requiring any on-chain smart-contract changes.
 
 NOTE: TokenGuard is currently in beta on devnet only and is unaudited.
+
+## Quick Start
+
+```shell
+$ yarn global add @civic/token-guard
+$ token-guard create --help
+```
 
 ## How it works
 
@@ -25,6 +33,18 @@ if the user has a valid Civic Pass.
 Note: the equivalent pattern applies to other protocols. 
 
 ![Candy Machine Example](./docs/TokenGuardCandyMachine.png)
+
+## Allowance
+
+TokenGuard has an "allowance" feature, that allows only x purchases per wallet, per token-guard.
+
+For example, if the allowance is set to 1, a user with a valid [Civic Pass](https://www.civic.com)
+associated with their wallet can make one purchase only.
+
+They cannot use a second wallet, unless that wallet also has a Civic Pass associated with it. Civic Passes
+are non-transferable.
+
+Set up an allowance with the `--allowance` flag.
 
 ## Coming Soon
 

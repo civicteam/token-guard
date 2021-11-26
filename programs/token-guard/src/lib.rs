@@ -32,6 +32,7 @@ pub mod token_guard {
     mint_authority_bump: u8,
     start_time: Option<i64>,
     allowance: Option<u8>,
+    max_amount: Option<u64>,
   ) -> ProgramResult {
     let token_guard = &mut ctx.accounts.token_guard;
 
@@ -66,6 +67,7 @@ pub mod token_guard {
     token_guard.start_time = start_time;
     // store zero as the "no allowance" rather than the extra byte an optional would require
     token_guard.allowance = allowance.unwrap_or_default();
+    token_guard.max_amount = max_amount;
 
     Ok(())
   }
@@ -82,6 +84,14 @@ pub mod token_guard {
       if clock.unix_timestamp < start_time {
         msg!("Not live yet");
         return Err(ErrorCode::NotLiveYet.into());
+      }
+    }
+
+    // Does the amount exceed the TokenGuard's maximum amount?
+    if let Some(max_amount) = token_guard.max_amount {
+      if lamports > max_amount {
+        msg!("Amount exceeds maximum");
+        return Err(ErrorCode::MaxAmountExceeded.into());
       }
     }
 
@@ -207,7 +217,7 @@ pub mod token_guard {
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-  #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 32 + 1 + (1 + 8) + 1)]
+  #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 32 + 1 + (1 + 8) + 1 + (1 + 8))]
   token_guard: ProgramAccount<'info, TokenGuard>,
   #[account(mut)]
   authority: Signer<'info>,
@@ -287,9 +297,9 @@ pub struct TokenGuard {
   pub mint_authority_bump: u8,
   // pub in_mint: Option<Pubkey>,
   pub start_time: Option<i64>, // i64 because that is the type of clock.unix_timestamp
-  // pub max_amount: Option<u64>,
   // pub gt_expiry_tolerance: u32,
   pub allowance: u8,
+  pub max_amount: Option<u64>,
 }
 
 #[account]
@@ -320,4 +330,6 @@ pub enum ErrorCode {
   TokenAccountNotEphemeral,
   #[msg("The payer already has made the allowed amount of purchases with this TokenGuard")]
   AllowanceExceeded,
+  #[msg("The amount exceeds the maximum amount allowed by this TokenGuard")]
+  MaxAmountExceeded,
 }

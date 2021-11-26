@@ -26,7 +26,12 @@ TokenGuard created.
     startTime: startTimeFlag(),
     allowance: flags.integer({
       char: "a",
-      description: "The number of times a buyer can use this tokenGuard (default infinite)",
+      description:
+        "The number of times a buyer can use this tokenGuard (default no limit)",
+    }),
+    maxAmount: flags.integer({
+      char: "m",
+      description: "The maximum transaction amount (default no limit)",
     }),
   };
 
@@ -40,10 +45,11 @@ TokenGuard created.
     const tokenGuardState = await initialize(
       program,
       provider,
-      flags.gatekeeperNetworkKey,
-      flags.recipientKey,
+      flags.gatekeeperNetwork,
+      flags.recipient,
       flags.startTime,
-      flags.allowance
+      flags.allowance,
+      flags.maxAmount
     );
 
     this.log(

@@ -1,7 +1,7 @@
 {
   "name": "@civic/token-guard",
   "description": "Client SDK for the TokenGuard Solana program",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "author": "dankelleher @dankelleher",
   "bugs": "https://github.com/civicteam/token-guard/issues",
   "license": "MIT",

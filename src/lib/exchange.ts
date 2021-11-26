@@ -10,7 +10,11 @@ import {
 import { TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import { TokenGuard } from "../../target/types/token_guard";
-import { deriveMintAuthority, getTokenWallet } from "./util";
+import {
+  deriveAllowanceAccount,
+  deriveMintAuthority,
+  getTokenWallet,
+} from "./util";
 
 export const exchange = async (
   connection: anchor.web3.Connection,
@@ -50,20 +54,38 @@ export const exchange = async (
     []
   );
 
-  const exchangeInstruction = program.instruction.exchange(new BN(amount), {
-    accounts: {
-      tokenGuard: tokenGuard,
-      payer: sender,
-      payerAta: senderAta,
-      recipient: tokenGuardAccount.recipient,
-      outMint: tokenGuardAccount.outMint,
-      mintAuthority,
-      gatewayToken: gatewayToken.publicKey,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: anchor.web3.SystemProgram.programId,
-      clock: web3.SYSVAR_CLOCK_PUBKEY,
-    },
+  const [allowanceAccount, allowanceAccountBump] = await deriveAllowanceAccount(
+    tokenGuard,
+    sender,
+    program
+  );
+
+  console.log({
+    tokenGuard: tokenGuard.toString(),
+    payer: sender.toString(),
+    allowanceAccount: allowanceAccount.toString(),
   });
+
+  const exchangeInstruction = program.instruction.exchange(
+    new BN(amount),
+    allowanceAccountBump,
+    {
+      accounts: {
+        tokenGuard: tokenGuard,
+        payer: sender,
+        payerAta: senderAta,
+        recipient: tokenGuardAccount.recipient,
+        outMint: tokenGuardAccount.outMint,
+        mintAuthority,
+        gatewayToken: gatewayToken.publicKey,
+        allowanceAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        clock: web3.SYSVAR_CLOCK_PUBKEY,
+        rent: web3.SYSVAR_RENT_PUBKEY,
+      },
+    }
+  );
 
   return [createATAInstruction, closeATAInstruction, exchangeInstruction];
 };

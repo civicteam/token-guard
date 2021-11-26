@@ -100,3 +100,18 @@ export const deriveMintAuthority = async (
     program.programId
   );
 };
+
+export const deriveAllowanceAccount = async (
+  tokenGuard: anchor.web3.PublicKey,
+  sender: anchor.web3.PublicKey,
+  program: Program<TokenGuard>
+) => {
+  return web3.PublicKey.findProgramAddress(
+    [
+      Buffer.from("token_guard_allowance_account"),
+      tokenGuard.toBuffer(),
+      sender.toBuffer(),
+    ],
+    program.programId
+  );
+};

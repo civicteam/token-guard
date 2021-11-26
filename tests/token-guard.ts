@@ -15,6 +15,7 @@ import {
 import { GatewayToken } from "@identity.com/solana-gateway-ts";
 import { DummySpender } from "../target/types/dummy_spender";
 import { exchange, initialize, TokenGuardState } from "../src/";
+import { TransactionInstruction } from "@solana/web3.js";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
@@ -76,7 +77,17 @@ describe("token-guard", () => {
   let listenerId: number;
 
   const exchangeAmount = 1_000;
-  const topUpAmount = exchangeAmount + 10_000;
+  const topUpAmount = exchangeAmount + 10_000_000; // TODO added more for the "allowance" case
+
+  const sendTransactionFromSender = async (
+    instructions: TransactionInstruction[]
+  ) => {
+    const { blockhash } = await provider.connection.getRecentBlockhash();
+    const transaction = new web3.Transaction({
+      recentBlockhash: blockhash,
+    }).add(...instructions);
+    return provider.send(transaction, [sender]);
+  };
 
   before("Set up the log listener for easier debugging", async () => {
     listenerId = provider.connection.onLogs("all", console.log, "confirmed");
@@ -180,41 +191,17 @@ describe("token-guard", () => {
       )
     );
 
-    // sender exchanges sol for tokens
-    const txSig = await program.rpc.exchange(new BN(exchangeAmount), {
-      accounts: {
-        tokenGuard: tokenGuardState.id,
-        payer: sender.publicKey,
-        payerAta: senderAta,
-        recipient: tokenGuardState.recipient,
-        outMint: tokenGuardState.outMint,
-        mintAuthority: tokenGuardState.mintAuthority,
-        gatewayToken: gatewayToken.publicKey,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: web3.SystemProgram.programId,
-        clock: web3.SYSVAR_CLOCK_PUBKEY,
-      },
-      signers: [sender],
-      instructions: [
-        Token.createAssociatedTokenAccountInstruction(
-          ASSOCIATED_TOKEN_PROGRAM_ID,
-          TOKEN_PROGRAM_ID,
-          tokenGuardAccount.outMint,
-          senderAta,
-          sender.publicKey,
-          provider.wallet.publicKey
-        ),
-        Token.createCloseAccountInstruction(
-          TOKEN_PROGRAM_ID,
-          senderAta,
-          sender.publicKey,
-          sender.publicKey,
-          []
-        ),
-      ],
-    });
+    const instructions = await exchange(
+      provider.connection,
+      program,
+      tokenGuardState.id,
+      sender.publicKey,
+      sender.publicKey,
+      gatekeeperNetwork.publicKey,
+      exchangeAmount
+    );
 
-    await provider.connection.confirmTransaction(txSig, "finalized");
+    await sendTransactionFromSender(instructions);
 
     console.log(await provider.connection.getBalance(sender.publicKey));
 
@@ -310,6 +297,60 @@ describe("token-guard", () => {
       instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
     });
 
+    return expect(shouldFail).to.be.rejectedWith(
+      /Transaction simulation failed/
+    );
+  });
+
+  it("initialises a tokenGuard with an allowance", async () => {
+    tokenGuardState = await initialize(
+      program,
+      provider,
+      gatekeeperNetwork.publicKey,
+      recipient.publicKey,
+      undefined,
+      2
+    );
+  });
+
+  it("fails to exchange three times for the same user", async () => {
+    senderAta = await Token.getAssociatedTokenAddress(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      tokenGuardState.outMint,
+      sender.publicKey,
+      true
+    );
+
+    // fund the sender
+    await provider.send(
+      new web3.Transaction().add(
+        web3.SystemProgram.transfer({
+          fromPubkey: provider.wallet.publicKey,
+          toPubkey: sender.publicKey,
+          lamports: topUpAmount,
+        })
+      )
+    );
+
+    const instructions = await exchange(
+      provider.connection,
+      program,
+      tokenGuardState.id,
+      sender.publicKey,
+      sender.publicKey,
+      gatekeeperNetwork.publicKey,
+      exchangeAmount
+    );
+
+    console.log("First exchange");
+    await sendTransactionFromSender(instructions);
+
+    console.log("Second exchange");
+    await sendTransactionFromSender(instructions);
+
+    console.log("Third exchange");
+    const shouldFail = sendTransactionFromSender(instructions);
     return expect(shouldFail).to.be.rejectedWith(
       /Transaction simulation failed/
     );

@@ -13,17 +13,21 @@ export default class Create extends Command {
   static description = "Create a TokenGuard";
 
   static examples = [
-    `$ tokenguard create -r
+    `$ token-guard create -r
 TokenGuard created.
 `,
   ];
 
   static flags: flags.Input<any> = {
     help: flags.help({ char: "h" }),
-    recipientKey: recipientPubkeyFlag(),
-    gatekeeperNetworkKey: gatekeeperNetworkPubkeyFlag(),
+    recipient: recipientPubkeyFlag(),
+    gatekeeperNetwork: gatekeeperNetworkPubkeyFlag(),
     cluster: clusterFlag(),
     startTime: startTimeFlag(),
+    allowance: flags.integer({
+      char: "a",
+      description: "The number of times a buyer can use this tokenGuard (default infinite)",
+    }),
   };
 
   static args = [];
@@ -38,7 +42,8 @@ TokenGuard created.
       provider,
       flags.gatekeeperNetworkKey,
       flags.recipientKey,
-      flags.startTime
+      flags.startTime,
+      flags.allowance
     );
 
     this.log(

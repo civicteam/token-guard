@@ -10,7 +10,7 @@ export const gatekeeperNetworkPubkeyFlag = flags.build<web3.PublicKey>({
   default: () =>
     new web3.PublicKey("tgnuXXNMDLK8dy7Xm1TdeGyc95MDym4bvAQCwcW21Bf"),
   description:
-    "The public key (in base 58) of the gatekeeper network that the gatekeeper belongs to.",
+    "The public key (in base 58) of the gatekeeper network to accept gateway tokens from.",
 });
 
 export const recipientPubkeyFlag = flags.build<web3.PublicKey>({

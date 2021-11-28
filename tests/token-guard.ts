@@ -244,7 +244,7 @@ describe("token-guard", () => {
       provider
     );
 
-    await spenderProgram.rpc.spend(new BN(exchangeAmount), {
+    const txSig = await spenderProgram.rpc.spend(new BN(exchangeAmount), {
       accounts: {
         payer: sender.publicKey,
         payerAta: senderAta,
@@ -254,6 +254,8 @@ describe("token-guard", () => {
       signers: [sender],
       instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
     });
+
+    await provider.connection.confirmTransaction(txSig)
   });
 
   it("initialises a tokenGuard that is not yet live", async () => {

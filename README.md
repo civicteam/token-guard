@@ -132,7 +132,7 @@ import * as TokenGuard from "@civic/token-guard";
 
 const tokenGuard = new PublicKey("<ID from step 1>")
 const program = await TokenGuard.fetchProgram(provider)
-const instructions = await TokenGuard.exchange(
+const tokenGuardInstructions = await TokenGuard.exchange(
     connection,
     program,
     tokenGuard,

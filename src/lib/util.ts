@@ -35,6 +35,17 @@ export interface TokenGuardState {
   gatekeeperNetwork: anchor.web3.PublicKey;
 }
 
+export type MembershipToken = {
+  key: anchor.web3.PublicKey;
+  strategy: "SPL" | "NFT-UA" | "NFT-Creator";
+};
+
+export type MembershipTokenAccount = {
+  tokenAccount: anchor.web3.PublicKey;
+  // for use with NFT strategies
+  metadata?: anchor.web3.PublicKey;
+};
+
 export const fetchProgram = async (
   provider: Provider
 ): Promise<Program<TokenGuard>> => {

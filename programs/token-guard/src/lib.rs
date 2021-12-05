@@ -1,11 +1,7 @@
 mod guard_utils;
 mod token_utils;
 
-use {
-    anchor_lang::{
-        prelude::*, solana_program::system_program, AnchorDeserialize, AnchorSerialize,
-    },
-};
+use anchor_lang::{prelude::*, solana_program::system_program, AnchorDeserialize, AnchorSerialize};
 
 declare_id!("tg7bdEQom2SZT1JB2d77RDJFYaL4eZ2FcM8HZZAg5Z8");
 
@@ -17,24 +13,25 @@ const TOKEN_GUARD_SIZE: usize = 8 + 32 + 32 + 32 + (1 + 32) + 32 + 1 + (1 + 8) +
 #[program]
 pub mod token_guard {
     use super::*;
-  use crate::{
-    guard_utils::*,
-    token_utils::{spl_token_mint, TokenMintParams}
-  };
+    use crate::{
+        guard_utils::*,
+        token_utils::{spl_token_mint, TokenMintParams},
+    };
 
-  pub fn initialize(
+    pub fn initialize(
         ctx: Context<Initialize>,
         gatekeeper_network: Pubkey,
         mint_authority_bump: u8,
         start_time: Option<i64>,
         allowance: Option<u8>,
         max_amount: Option<u64>,
+        membership_token: Option<Pubkey>,
     ) -> ProgramResult {
         let token_guard = &mut ctx.accounts.token_guard;
         let out_mint = &ctx.accounts.out_mint;
         let mint_authority = &ctx.accounts.mint_authority;
 
-        // TODO move these to anchor guards
+        // TODO move this to anchor guards
         check_out_mint(out_mint, mint_authority)?;
 
         token_guard.authority = *ctx.accounts.authority.key;
@@ -42,13 +39,21 @@ pub mod token_guard {
         token_guard.recipient = *ctx.accounts.recipient.key;
         // token_guard.recipient_ata = *ctx.accounts.recipient_ata.key;
         token_guard.out_mint = *ctx.accounts.out_mint.key;
-        token_guard.start_time = start_time;
-        // store zero as the "no allowance" rather than the extra byte an optional would require
-        token_guard.allowance = allowance.unwrap_or_default();
-        token_guard.max_amount = max_amount;
-        token_guard.mint_authority_bump = mint_authority_bump;
-        token_guard.membership_token = Option::None;
-        token_guard.strategy = Strategy::GatewayOnly;
+        token_guard.membership_token = membership_token;
+
+        let strategy = match membership_token {
+            Some(_) => Strategy::MembershipSPLToken,
+            None => Strategy::GatewayOnly,
+        };
+
+        set_properties(
+            token_guard,
+            mint_authority_bump,
+            start_time,
+            allowance,
+            max_amount,
+            strategy,
+        );
 
         Ok(())
     }
@@ -71,6 +76,7 @@ pub mod token_guard {
         let rent = &ctx.accounts.rent;
         let system_program = &ctx.accounts.system_program;
         let token_program = &ctx.accounts.token_program;
+        let membership_token = &ctx.remaining_accounts.get(0);
 
         check_start_time(clock, token_guard)?;
         check_max_amount(lamports, token_guard)?;
@@ -85,6 +91,8 @@ pub mod token_guard {
             &rent,
             &system_program,
         )?;
+
+        check_membership_token(membership_token, token_guard)?;
 
         transfer_lamports(lamports, &payer, &recipient, &system_program)?;
 
@@ -256,4 +264,8 @@ pub enum ErrorCode {
     AllowanceExceeded,
     #[msg("The amount exceeds the maximum amount allowed by this TokenGuard")]
     MaxAmountExceeded,
+    #[msg("The presented membership token does not match the required mint")]
+    MembershipTokenMintMismatch,
+    #[msg("The presented membership token is missing or the balance is insufficient")]
+    NoMembershipToken,
 }

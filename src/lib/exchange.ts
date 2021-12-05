@@ -14,6 +14,7 @@ import {
   deriveAllowanceAccount,
   deriveMintAuthority,
   getTokenWallet,
+  MembershipTokenAccount,
 } from "./util";
 
 export const exchange = async (
@@ -23,7 +24,8 @@ export const exchange = async (
   sender: anchor.web3.PublicKey,
   payer: anchor.web3.PublicKey,
   gatekeeperNetwork: anchor.web3.PublicKey,
-  amount: number
+  amount: number,
+  membershipTokenAccount?: MembershipTokenAccount
 ): Promise<TransactionInstruction[]> => {
   const tokenGuardAccount = await program.account.tokenGuard.fetch(tokenGuard);
   const senderAta = await getTokenWallet(sender, tokenGuardAccount.outMint);
@@ -64,7 +66,20 @@ export const exchange = async (
     tokenGuard: tokenGuard.toString(),
     payer: sender.toString(),
     allowanceAccount: allowanceAccount.toString(),
+    membershipTokenAccount: membershipTokenAccount?.tokenAccount.toString(),
   });
+
+  const remainingAccounts = [
+    ...(membershipTokenAccount
+      ? [
+          {
+            pubkey: membershipTokenAccount.tokenAccount,
+            isWritable: false,
+            isSigner: false,
+          },
+        ]
+      : []),
+  ];
 
   const exchangeInstruction = program.instruction.exchange(
     new BN(amount),
@@ -84,6 +99,7 @@ export const exchange = async (
         clock: web3.SYSVAR_CLOCK_PUBKEY,
         rent: web3.SYSVAR_RENT_PUBKEY,
       },
+      remainingAccounts,
     }
   );
 

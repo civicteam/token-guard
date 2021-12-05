@@ -3,7 +3,7 @@ import * as anchor from "@project-serum/anchor";
 import { MintLayout, Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { TokenGuard } from "../../target/types/token_guard";
 import { BN, Program, web3 } from "@project-serum/anchor";
-import { deriveMintAuthority, TokenGuardState } from "./util";
+import { deriveMintAuthority, MembershipToken, TokenGuardState } from "./util";
 
 const DECIMALS = 9; // lamports in 1 sol
 
@@ -14,7 +14,8 @@ export const initialize = async (
   recipient: anchor.web3.PublicKey,
   startTime?: number,
   allowance?: number,
-  maxAmount?: number
+  maxAmount?: number,
+  membershipToken?: MembershipToken
 ): Promise<TokenGuardState> => {
   const tokenGuard = web3.Keypair.generate();
   const mint = web3.Keypair.generate();
@@ -25,6 +26,7 @@ export const initialize = async (
   const startTimeBN = startTime ? new BN(startTime) : null;
   const allowanceOrNull = allowance || null;
   const maxAmountBN = maxAmount ? new BN(maxAmount) : null;
+  const membershipTokenOrNull = membershipToken?.key || null;
 
   await program.rpc.initialize(
     gatekeeperNetwork,
@@ -32,6 +34,7 @@ export const initialize = async (
     startTimeBN,
     allowanceOrNull,
     maxAmountBN,
+    membershipTokenOrNull,
     {
       accounts: {
         tokenGuard: tokenGuard.publicKey,

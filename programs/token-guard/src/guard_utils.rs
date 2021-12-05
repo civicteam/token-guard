@@ -1,3 +1,4 @@
+use crate::Strategy;
 use anchor_lang::solana_program::program::invoke;
 use solana_gateway::Gateway;
 use std::borrow::BorrowMut;
@@ -114,6 +115,29 @@ pub fn check_balance(lamports: u64, payer: &Signer) -> ProgramResult {
     Ok(())
 }
 
+pub fn check_membership_token(
+    optional_membership_token: &Option<&AccountInfo>,
+    token_guard: &ProgramAccount<TokenGuard>,
+) -> ProgramResult {
+    msg!("Checking membership token");
+    match token_guard.strategy {
+        Strategy::MembershipSPLToken => {
+            msg!("with strategy SPL");
+            let membership_token = optional_membership_token.ok_or(ErrorCode::NoMembershipToken)?;
+            let token_account: spl_token::state::Account = assert_initialized(&membership_token)?;
+            if token_account.mint != token_guard.membership_token.unwrap() {
+                return Err(ErrorCode::MembershipTokenMintMismatch.into());
+            }
+            if token_account.amount == 0 {
+                return Err(ErrorCode::NoMembershipToken.into());
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
 pub fn check_and_update_allowance<'info>(
     allowance_account_bump: u8,
     token_guard: &ProgramAccount<TokenGuard>,
@@ -201,4 +225,20 @@ pub fn transfer_lamports<'info>(
     msg!("Transfer complete");
 
     Ok(())
+}
+
+pub fn set_properties(
+    token_guard: &mut ProgramAccount<TokenGuard>,
+    mint_authority_bump: u8,
+    start_time: Option<i64>,
+    allowance: Option<u8>,
+    max_amount: Option<u64>,
+    strategy: Strategy,
+) {
+    token_guard.start_time = start_time;
+    // store zero as the "no allowance" rather than the extra byte an optional would require
+    token_guard.allowance = allowance.unwrap_or_default();
+    token_guard.max_amount = max_amount;
+    token_guard.mint_authority_bump = mint_authority_bump;
+    token_guard.strategy = strategy;
 }

@@ -79,6 +79,17 @@ describe("token-guard", () => {
   const exchangeAmount = 1_000;
   const topUpAmount = exchangeAmount + 10_000_000; // TODO added more for the "allowance" case
 
+  const fund = (to: anchor.web3.PublicKey) =>
+    provider.send(
+      new web3.Transaction().add(
+        web3.SystemProgram.transfer({
+          fromPubkey: provider.wallet.publicKey,
+          toPubkey: to,
+          lamports: 500_000_000,
+        })
+      )
+    );
+
   const sendTransactionFromSender = async (
     instructions: TransactionInstruction[]
   ) => {
@@ -93,18 +104,13 @@ describe("token-guard", () => {
     listenerId = provider.connection.onLogs("all", console.log, "confirmed");
   });
 
-  before("Set up gatekeeper network and gateway token", async () => {
-    // fund the gatekeeper
-    await provider.send(
-      new web3.Transaction().add(
-        web3.SystemProgram.transfer({
-          fromPubkey: provider.wallet.publicKey,
-          toPubkey: gatekeeper.publicKey,
-          lamports: 5_000_000,
-        })
-      )
-    );
+  before("Fund everyone", async () => {
+    await fund(gatekeeper.publicKey);
+    await fund(sender.publicKey);
+    await fund(recipient.publicKey);
+  });
 
+  before("Set up gatekeeper network and gateway token", async () => {
     // create a new gatekeeper network (no on-chain tx here)
     const gknService = new GatekeeperNetworkService(
       provider.connection,
@@ -123,17 +129,6 @@ describe("token-guard", () => {
 
     // create a new gateway token
     gatewayToken = await gkService.issue(sender.publicKey);
-
-    // fund the sender
-    await provider.send(
-      new web3.Transaction().add(
-        web3.SystemProgram.transfer({
-          fromPubkey: provider.wallet.publicKey,
-          toPubkey: sender.publicKey,
-          lamports: topUpAmount,
-        })
-      )
-    );
   });
 
   after(() => provider.connection.removeOnLogsListener(listenerId));
@@ -178,17 +173,6 @@ describe("token-guard", () => {
       tokenGuardState.outMint,
       sender.publicKey,
       true
-    );
-
-    // fund the sender
-    await provider.send(
-      new web3.Transaction().add(
-        web3.SystemProgram.transfer({
-          fromPubkey: provider.wallet.publicKey,
-          toPubkey: sender.publicKey,
-          lamports: topUpAmount,
-        })
-      )
     );
 
     const instructions = await exchange(
@@ -255,7 +239,7 @@ describe("token-guard", () => {
       instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
     });
 
-    await provider.connection.confirmTransaction(txSig)
+    await provider.connection.confirmTransaction(txSig);
   });
 
   it("initialises a tokenGuard that is not yet live", async () => {
@@ -380,5 +364,170 @@ describe("token-guard", () => {
     return expect(shouldFail).to.be.rejectedWith(
       /Transaction simulation failed/
     );
+  });
+
+  context("Membership Token SPL", () => {
+    let membershipTokenMint: Token;
+    // this is often the same entity, but to avoid confusion, we alias here.
+    const membershipTokenMinter = recipient;
+
+    let senderMembershipTokenATA: web3.PublicKey;
+
+    it("initialises a tokenGuard with a membership token requirement", async () => {
+      membershipTokenMint = await Token.createMint(
+        provider.connection,
+        membershipTokenMinter,
+        membershipTokenMinter.publicKey,
+        membershipTokenMinter.publicKey,
+        0,
+        TOKEN_PROGRAM_ID
+      );
+
+      console.log(`Minted membership token ${membershipTokenMint.publicKey}`);
+
+      tokenGuardState = await initialize(
+        program,
+        provider,
+        gatekeeperNetwork.publicKey,
+        recipient.publicKey,
+        undefined,
+        undefined,
+        undefined,
+        {
+          key: membershipTokenMint.publicKey,
+          strategy: "SPL",
+        }
+      );
+    });
+
+    it("should not let someone without the membership token exchange", async () => {
+      const instructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount
+      );
+
+      // fail, because the membership token account is not presented
+      const shouldFail = sendTransactionFromSender(instructions);
+
+      return expect(shouldFail).to.be.rejectedWith(
+        /Transaction simulation failed/
+      );
+    });
+
+    it("should not let someone with an insufficient balance of the membership token exchange", async () => {
+      senderMembershipTokenATA =
+        await membershipTokenMint.createAssociatedTokenAccount(
+          sender.publicKey
+        );
+      const instructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount,
+        {
+          tokenAccount: senderMembershipTokenATA,
+        }
+      );
+
+      // fail, because the account is present, but it is empty
+      const shouldFail = sendTransactionFromSender(instructions);
+
+      return expect(shouldFail).to.be.rejectedWith(
+        /Transaction simulation failed/
+      );
+    });
+
+    it("should not let someone that does not own the membership token exchange", async () => {
+      const someRandomMembershipTokenATA =
+        await membershipTokenMint.createAssociatedTokenAccount(
+          web3.Keypair.generate().publicKey
+        );
+      const instructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount,
+        {
+          tokenAccount: someRandomMembershipTokenATA,
+        }
+      );
+
+      // fail, because the account is present, but has the wrong owner
+      const shouldFail = sendTransactionFromSender(instructions);
+
+      return expect(shouldFail).to.be.rejectedWith(
+        /Transaction simulation failed/
+      );
+    });
+
+    it("should fail if the wrong membership token account is presented", async () => {
+      const someOtherToken = await Token.createMint(
+        provider.connection,
+        membershipTokenMinter,
+        membershipTokenMinter.publicKey,
+        membershipTokenMinter.publicKey,
+        0,
+        TOKEN_PROGRAM_ID
+      );
+      const someOtherTokenATA =
+        await someOtherToken.createAssociatedTokenAccount(
+          web3.Keypair.generate().publicKey
+        );
+
+      const instructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount,
+        {
+          tokenAccount: someOtherTokenATA,
+        }
+      );
+
+      // fail, because the account is present, but is for the wrong token
+      const shouldFail = sendTransactionFromSender(instructions);
+
+      return expect(shouldFail).to.be.rejectedWith(
+        /Transaction simulation failed/
+      );
+    });
+
+    it("should let someone with the token exchange", async () => {
+      await membershipTokenMint.mintTo(
+        senderMembershipTokenATA,
+        membershipTokenMinter,
+        [],
+        1
+      );
+
+      const instructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount,
+        {
+          tokenAccount: senderMembershipTokenATA,
+        }
+      );
+
+      await sendTransactionFromSender(instructions);
+    });
   });
 });

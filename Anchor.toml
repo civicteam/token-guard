@@ -14,3 +14,7 @@ test = "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 [[test.genesis]]
 address = "gatem74V238djXdzWnJf94Wo1DcnuGkfijbf3AuBhfs"
 program = "tests/fixtures/solana_gateway_program.so"
+
+[[test.genesis]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+program = "tests/fixtures/spl_token_metadata.so"

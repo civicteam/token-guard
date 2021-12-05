@@ -1,18 +1,18 @@
-use crate::Strategy;
-use anchor_lang::solana_program::program::invoke;
-use solana_gateway::Gateway;
-use std::borrow::BorrowMut;
 use {
     crate::{
         id,
+        nft_utils::check_nft_metadata,
         token_utils::{assert_initialized, assert_owned_by},
-        AllowanceAccount, ErrorCode, TokenGuard, ALLOWANCE_ACCOUNT_SEED,
+        AllowanceAccount, ErrorCode, Strategy, TokenGuard, ALLOWANCE_ACCOUNT_SEED,
     },
     anchor_lang::{
         prelude::*,
+        solana_program::program::invoke,
         solana_program::{program::invoke_signed, program_option::COption, system_instruction},
     },
+    solana_gateway::Gateway,
     spl_token::state::Mint,
+    std::borrow::BorrowMut,
 };
 
 pub fn check_mint_authority(mint_authority: &AccountInfo, token_mint: Mint) -> ProgramResult {
@@ -117,22 +117,50 @@ pub fn check_balance(lamports: u64, payer: &Signer) -> ProgramResult {
 
 pub fn check_membership_token(
     optional_membership_token: &Option<&AccountInfo>,
+    optional_membership_token_mint: &Option<&AccountInfo>,
+    optional_metadata_account: &Option<&AccountInfo>,
     token_guard: &ProgramAccount<TokenGuard>,
 ) -> ProgramResult {
-    msg!("Checking membership token");
+    msg!(
+        "Checking membership token with strategy {:?}",
+        token_guard.strategy
+    );
     match token_guard.strategy {
+        Strategy::GatewayOnly => { /* No membership token - do nothing */ }
         Strategy::MembershipSPLToken => {
-            msg!("with strategy SPL");
             let membership_token = optional_membership_token.ok_or(ErrorCode::NoMembershipToken)?;
             let token_account: spl_token::state::Account = assert_initialized(&membership_token)?;
             if token_account.mint != token_guard.membership_token.unwrap() {
-                return Err(ErrorCode::MembershipTokenMintMismatch.into());
+                return Err(ErrorCode::MembershipTokenMismatch.into());
             }
             if token_account.amount == 0 {
                 return Err(ErrorCode::NoMembershipToken.into());
             }
         }
-        _ => {}
+        _ => {
+            let membership_token = optional_membership_token.ok_or(ErrorCode::NoMembershipToken)?;
+            let token_account: spl_token::state::Account = assert_initialized(&membership_token)?;
+
+            let membership_token_mint =
+                optional_membership_token_mint.ok_or(ErrorCode::MembershipTokenMismatch)?;
+            // need to set the output variable here so the compiler can check it has the right traits
+            // TODO a rustier way of doing this?
+            let _mint: Mint = assert_initialized(membership_token_mint)?;
+            assert_owned_by(membership_token_mint, &spl_token::id())?;
+
+            let metadata_account =
+                optional_metadata_account.ok_or(ErrorCode::MembershipTokenMismatch)?;
+
+            if token_account.mint != token_guard.out_mint {
+                return Err(ErrorCode::MintMismatch.into());
+            }
+
+            if token_account.amount == 0 {
+                return Err(ErrorCode::NoMembershipToken.into());
+            }
+
+            check_nft_metadata(metadata_account, membership_token_mint, token_guard)?
+        }
     }
 
     Ok(())

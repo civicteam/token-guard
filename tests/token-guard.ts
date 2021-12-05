@@ -16,6 +16,8 @@ import { GatewayToken } from "@identity.com/solana-gateway-ts";
 import { DummySpender } from "../target/types/dummy_spender";
 import { exchange, initialize, TokenGuardState } from "../src/";
 import { TransactionInstruction } from "@solana/web3.js";
+import { Metadata } from "@metaplex/js/lib/programs/metadata";
+import { actions } from "@metaplex/js";
 
 chai.use(chaiAsPromised);
 const { expect } = chai;
@@ -77,7 +79,6 @@ describe("token-guard", () => {
   let listenerId: number;
 
   const exchangeAmount = 1_000;
-  const topUpAmount = exchangeAmount + 10_000_000; // TODO added more for the "allowance" case
 
   const fund = (to: anchor.web3.PublicKey) =>
     provider.send(
@@ -131,239 +132,243 @@ describe("token-guard", () => {
     gatewayToken = await gkService.issue(sender.publicKey);
   });
 
-  after(() => provider.connection.removeOnLogsListener(listenerId));
+  after("Remove log listener", () =>
+    provider.connection.removeOnLogsListener(listenerId)
+  );
 
-  it("initialises a new tokenGuard", async () => {
-    tokenGuardState = await initialize(
-      program,
-      provider,
-      gatekeeperNetwork.publicKey,
-      recipient.publicKey
-    );
+  context("Gateway Token only", () => {
+    it("initialises a new tokenGuard", async () => {
+      tokenGuardState = await initialize(
+        program,
+        provider,
+        gatekeeperNetwork.publicKey,
+        recipient.publicKey
+      );
 
-    console.log({
-      tokenGuard: tokenGuardState.id.toString(),
-      mint: tokenGuardState.outMint.toString(),
-      recipient: recipient.publicKey.toString(),
-      sender: sender.publicKey.toString(),
+      console.log({
+        tokenGuard: tokenGuardState.id.toString(),
+        mint: tokenGuardState.outMint.toString(),
+        recipient: recipient.publicKey.toString(),
+        sender: sender.publicKey.toString(),
+      });
+
+      tokenGuardAccount = await program.account.tokenGuard.fetch(
+        tokenGuardState.id
+      );
+
+      expect(tokenGuardAccount.recipient.toString()).to.equal(
+        recipient.publicKey.toString()
+      );
+      expect(tokenGuardAccount.outMint.toString()).to.equal(
+        tokenGuardState.outMint.toString()
+      );
+      expect(tokenGuardAccount.authority.toString()).to.equal(
+        provider.wallet.publicKey.toString()
+      );
+      expect(tokenGuardAccount.gatekeeperNetwork.toString()).to.equal(
+        gatekeeperNetwork.publicKey.toString()
+      );
     });
 
-    tokenGuardAccount = await program.account.tokenGuard.fetch(
-      tokenGuardState.id
-    );
+    it("exchanges sol for tokens", async () => {
+      senderAta = await Token.getAssociatedTokenAddress(
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
+        tokenGuardState.outMint,
+        sender.publicKey,
+        true
+      );
 
-    expect(tokenGuardAccount.recipient.toString()).to.equal(
-      recipient.publicKey.toString()
-    );
-    expect(tokenGuardAccount.outMint.toString()).to.equal(
-      tokenGuardState.outMint.toString()
-    );
-    expect(tokenGuardAccount.authority.toString()).to.equal(
-      provider.wallet.publicKey.toString()
-    );
-    expect(tokenGuardAccount.gatekeeperNetwork.toString()).to.equal(
-      gatekeeperNetwork.publicKey.toString()
-    );
-  });
+      const instructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount
+      );
 
-  it("exchanges sol for tokens", async () => {
-    senderAta = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      tokenGuardState.outMint,
-      sender.publicKey,
-      true
-    );
+      await sendTransactionFromSender(instructions);
 
-    const instructions = await exchange(
-      provider.connection,
-      program,
-      tokenGuardState.id,
-      sender.publicKey,
-      sender.publicKey,
-      gatekeeperNetwork.publicKey,
-      exchangeAmount
-    );
+      console.log(await provider.connection.getBalance(sender.publicKey));
 
-    await sendTransactionFromSender(instructions);
+      const balance = await provider.connection.getBalance(
+        recipient.publicKey,
+        "confirmed"
+      );
+      console.log(`balance for ${recipient.publicKey} ${balance}`);
 
-    console.log(await provider.connection.getBalance(sender.publicKey));
+      // for some reason, although the tx says the SOL is transferred, it is not registering in the recipient's account
+      // expect(balance).to.equal(exchange_amount);
 
-    const balance = await provider.connection.getBalance(
-      recipient.publicKey,
-      "confirmed"
-    );
-    console.log(`balance for ${recipient.publicKey} ${balance}`);
-
-    // for some reason, although the tx says the SOL is transferred, it is not registering in the recipient's account
-    // expect(balance).to.equal(exchange_amount);
-
-    // the sender's ATA should be closed, as it is ephemeral
-    const senderAtaInfo = await provider.connection.getParsedAccountInfo(
-      senderAta
-    );
-    expect(senderAtaInfo.value).to.be.null;
-    // const parsedAccountInfo = (senderAtaInfo.value.data as web3.ParsedAccountData).parsed;
-    // console.log(parsedAccountInfo);
-    // expect(parsedAccountInfo.info.tokenAmount.amount).to.equal(''+exchange_amount)
-  });
-
-  it("spends tokens in a separate program", async () => {
-    const spenderProgram = anchor.workspace
-      .DummySpender as Program<DummySpender>;
-
-    const tokenGuardInstructions = await exchange(
-      provider.connection,
-      program,
-      tokenGuardState.id,
-      sender.publicKey,
-      provider.wallet.publicKey,
-      gatekeeperNetwork.publicKey,
-      exchangeAmount
-    );
-
-    const { burnerATA, createBurnerATAInstruction } = await createBurnerATA(
-      tokenGuardState,
-      recipient,
-      provider
-    );
-
-    const txSig = await spenderProgram.rpc.spend(new BN(exchangeAmount), {
-      accounts: {
-        payer: sender.publicKey,
-        payerAta: senderAta,
-        recipient: burnerATA,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-      signers: [sender],
-      instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
+      // the sender's ATA should be closed, as it is ephemeral
+      const senderAtaInfo = await provider.connection.getParsedAccountInfo(
+        senderAta
+      );
+      expect(senderAtaInfo.value).to.be.null;
+      // const parsedAccountInfo = (senderAtaInfo.value.data as web3.ParsedAccountData).parsed;
+      // console.log(parsedAccountInfo);
+      // expect(parsedAccountInfo.info.tokenAmount.amount).to.equal(''+exchange_amount)
     });
 
-    await provider.connection.confirmTransaction(txSig);
-  });
+    it("spends tokens in a separate program", async () => {
+      const spenderProgram = anchor.workspace
+        .DummySpender as Program<DummySpender>;
 
-  it("initialises a tokenGuard that is not yet live", async () => {
-    tokenGuardState = await initialize(
-      program,
-      provider,
-      gatekeeperNetwork.publicKey,
-      recipient.publicKey,
-      Date.now() + 1_000_000
-    );
-  });
+      const tokenGuardInstructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        provider.wallet.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount
+      );
 
-  it("fails to spend tokens if the tokenGuard is not ready", async () => {
-    const spenderProgram = anchor.workspace
-      .DummySpender as Program<DummySpender>;
+      const { burnerATA, createBurnerATAInstruction } = await createBurnerATA(
+        tokenGuardState,
+        recipient,
+        provider
+      );
 
-    const tokenGuardInstructions = await exchange(
-      provider.connection,
-      program,
-      tokenGuardState.id,
-      sender.publicKey,
-      provider.wallet.publicKey,
-      gatekeeperNetwork.publicKey,
-      exchangeAmount
-    );
+      const txSig = await spenderProgram.rpc.spend(new BN(exchangeAmount), {
+        accounts: {
+          payer: sender.publicKey,
+          payerAta: senderAta,
+          recipient: burnerATA,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [sender],
+        instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
+      });
 
-    const { burnerATA, createBurnerATAInstruction } = await createBurnerATA(
-      tokenGuardState,
-      recipient,
-      provider
-    );
-
-    const shouldFail = spenderProgram.rpc.spend(new BN(exchangeAmount), {
-      accounts: {
-        payer: sender.publicKey,
-        payerAta: senderAta,
-        recipient: burnerATA,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-      signers: [sender],
-      instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
+      await provider.connection.confirmTransaction(txSig);
     });
 
-    return expect(shouldFail).to.be.rejectedWith(
-      /Transaction simulation failed/
-    );
-  });
+    it("initialises a tokenGuard that is not yet live", async () => {
+      tokenGuardState = await initialize(
+        program,
+        provider,
+        gatekeeperNetwork.publicKey,
+        recipient.publicKey,
+        Date.now() + 1_000_000
+      );
+    });
 
-  it("initialises a tokenGuard with an allowance", async () => {
-    tokenGuardState = await initialize(
-      program,
-      provider,
-      gatekeeperNetwork.publicKey,
-      recipient.publicKey,
-      undefined,
-      2
-    );
-  });
+    it("fails to spend tokens if the tokenGuard is not ready", async () => {
+      const spenderProgram = anchor.workspace
+        .DummySpender as Program<DummySpender>;
 
-  it("fails to exchange three times for the same user", async () => {
-    const instructions = await exchange(
-      provider.connection,
-      program,
-      tokenGuardState.id,
-      sender.publicKey,
-      sender.publicKey,
-      gatekeeperNetwork.publicKey,
-      exchangeAmount
-    );
+      const tokenGuardInstructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        provider.wallet.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount
+      );
 
-    console.log("First exchange");
-    await sendTransactionFromSender(instructions);
+      const { burnerATA, createBurnerATAInstruction } = await createBurnerATA(
+        tokenGuardState,
+        recipient,
+        provider
+      );
 
-    console.log("Second exchange");
-    await sendTransactionFromSender(instructions);
+      const shouldFail = spenderProgram.rpc.spend(new BN(exchangeAmount), {
+        accounts: {
+          payer: sender.publicKey,
+          payerAta: senderAta,
+          recipient: burnerATA,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [sender],
+        instructions: [createBurnerATAInstruction, ...tokenGuardInstructions],
+      });
 
-    console.log("Third exchange");
-    const shouldFail = sendTransactionFromSender(instructions);
-    return expect(shouldFail).to.be.rejectedWith(
-      /Transaction simulation failed/
-    );
-  });
+      return expect(shouldFail).to.be.rejectedWith(
+        /Transaction simulation failed/
+      );
+    });
 
-  it("initialises a tokenGuard with a max amount", async () => {
-    tokenGuardState = await initialize(
-      program,
-      provider,
-      gatekeeperNetwork.publicKey,
-      recipient.publicKey,
-      undefined,
-      undefined,
-      exchangeAmount - 100 // smaller than the exchange amount
-    );
-  });
+    it("initialises a tokenGuard with an allowance", async () => {
+      tokenGuardState = await initialize(
+        program,
+        provider,
+        gatekeeperNetwork.publicKey,
+        recipient.publicKey,
+        undefined,
+        2
+      );
+    });
 
-  it("fails to exchange if the value is too high", async () => {
-    const instructionsForAnExchangeThatIsTooBig = await exchange(
-      provider.connection,
-      program,
-      tokenGuardState.id,
-      sender.publicKey,
-      sender.publicKey,
-      gatekeeperNetwork.publicKey,
-      exchangeAmount
-    );
+    it("fails to exchange three times for the same user", async () => {
+      const instructions = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount
+      );
 
-    const instructionsForAnExchangeThatIsSmallEnough = await exchange(
-      provider.connection,
-      program,
-      tokenGuardState.id,
-      sender.publicKey,
-      sender.publicKey,
-      gatekeeperNetwork.publicKey,
-      exchangeAmount - 100
-    );
+      console.log("First exchange");
+      await sendTransactionFromSender(instructions);
 
-    await sendTransactionFromSender(instructionsForAnExchangeThatIsSmallEnough);
+      console.log("Second exchange");
+      await sendTransactionFromSender(instructions);
 
-    const shouldFail = sendTransactionFromSender(
-      instructionsForAnExchangeThatIsTooBig
-    );
-    return expect(shouldFail).to.be.rejectedWith(
-      /Transaction simulation failed/
-    );
+      console.log("Third exchange");
+      const shouldFail = sendTransactionFromSender(instructions);
+      return expect(shouldFail).to.be.rejectedWith(
+        /Transaction simulation failed/
+      );
+    });
+
+    it("initialises a tokenGuard with a max amount", async () => {
+      tokenGuardState = await initialize(
+        program,
+        provider,
+        gatekeeperNetwork.publicKey,
+        recipient.publicKey,
+        undefined,
+        undefined,
+        exchangeAmount - 100 // smaller than the exchange amount
+      );
+    });
+
+    it("fails to exchange if the value is too high", async () => {
+      const instructionsForAnExchangeThatIsTooBig = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount
+      );
+
+      const instructionsForAnExchangeThatIsSmallEnough = await exchange(
+        provider.connection,
+        program,
+        tokenGuardState.id,
+        sender.publicKey,
+        sender.publicKey,
+        gatekeeperNetwork.publicKey,
+        exchangeAmount - 100
+      );
+
+      await sendTransactionFromSender(instructionsForAnExchangeThatIsSmallEnough);
+
+      const shouldFail = sendTransactionFromSender(
+        instructionsForAnExchangeThatIsTooBig
+      );
+      return expect(shouldFail).to.be.rejectedWith(
+        /Transaction simulation failed/
+      );
+    });
   });
 
   context("Membership Token SPL", () => {
@@ -528,6 +533,32 @@ describe("token-guard", () => {
       );
 
       await sendTransactionFromSender(instructions);
+    });
+  });
+
+  context("Membership Token NFT", () => {
+    context("Upgrade Authority strategy", () => {
+      let mint: web3.PublicKey;
+      let metadata: web3.PublicKey;
+
+      before("Mint an NFT", async () => {
+        // TODO Stub axios to lookup metadata
+        const metadataUri = "somewhere";
+        const response = await actions.mintNFT({
+          connection: provider.connection,
+          wallet: provider.wallet,
+          uri: metadataUri,
+          maxSupply: 1,
+        });
+
+        mint = response.mint;
+        metadata = response.metadata;
+
+        console.log("mint", mint);
+        console.log("metadata", metadata);
+      });
+
+      it("should initialize a tokenGuard that requires presentation of an NFT", () => {});
     });
   });
 });

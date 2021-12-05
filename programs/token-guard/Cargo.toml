@@ -17,5 +17,6 @@ default = []
 [dependencies]
 anchor-lang = "0.18.0"
 anchor-spl = "0.18.0"
+metaplex-token-metadata = { version="0.0.1", features = [ "no-entrypoint" ] }
 spl-token = { version="3.1.1", features = [ "no-entrypoint" ] }
 solana-gateway = { git = "https://github.com/identity-com/on-chain-identity-gateway", branch = "develop", features = [ "no-entrypoint" ] }

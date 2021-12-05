@@ -1,4 +1,5 @@
 mod guard_utils;
+mod nft_utils;
 mod token_utils;
 
 use anchor_lang::{prelude::*, solana_program::system_program, AnchorDeserialize, AnchorSerialize};
@@ -76,7 +77,10 @@ pub mod token_guard {
         let rent = &ctx.accounts.rent;
         let system_program = &ctx.accounts.system_program;
         let token_program = &ctx.accounts.token_program;
+
         let membership_token = &ctx.remaining_accounts.get(0);
+        let membership_token_mint = &ctx.remaining_accounts.get(1);
+        let membership_token_metadata = &ctx.remaining_accounts.get(2);
 
         check_start_time(clock, token_guard)?;
         check_max_amount(lamports, token_guard)?;
@@ -92,7 +96,12 @@ pub mod token_guard {
             &system_program,
         )?;
 
-        check_membership_token(membership_token, token_guard)?;
+        check_membership_token(
+            membership_token,
+            membership_token_mint,
+            membership_token_metadata,
+            token_guard,
+        )?;
 
         transfer_lamports(lamports, &payer, &recipient, &system_program)?;
 
@@ -208,7 +217,8 @@ pub struct Exchange<'info> {
 pub enum Strategy {
     GatewayOnly,
     MembershipSPLToken,
-    MembershipNFT,
+    MembershipNftUpdateAuthority,
+    MembershipNftCreator,
 }
 impl Default for Strategy {
     fn default() -> Self {
@@ -264,8 +274,10 @@ pub enum ErrorCode {
     AllowanceExceeded,
     #[msg("The amount exceeds the maximum amount allowed by this TokenGuard")]
     MaxAmountExceeded,
-    #[msg("The presented membership token does not match the required mint")]
-    MembershipTokenMintMismatch,
+    #[msg("The presented membership token does not match the required token")]
+    MembershipTokenMismatch,
     #[msg("The presented membership token is missing or the balance is insufficient")]
     NoMembershipToken,
+    #[msg("The strategy does not match the properties of the TokenGuard")]
+    InvalidStrategy,
 }

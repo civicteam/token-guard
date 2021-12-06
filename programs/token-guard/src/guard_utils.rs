@@ -140,6 +140,9 @@ pub fn check_membership_token(
         _ => {
             let membership_token = optional_membership_token.ok_or(ErrorCode::NoMembershipToken)?;
             let token_account: spl_token::state::Account = assert_initialized(&membership_token)?;
+            if token_account.amount == 0 {
+                return Err(ErrorCode::NoMembershipToken.into());
+            }
 
             let membership_token_mint =
                 optional_membership_token_mint.ok_or(ErrorCode::MembershipTokenMismatch)?;
@@ -148,16 +151,12 @@ pub fn check_membership_token(
             let _mint: Mint = assert_initialized(membership_token_mint)?;
             assert_owned_by(membership_token_mint, &spl_token::id())?;
 
-            let metadata_account =
-                optional_metadata_account.ok_or(ErrorCode::MembershipTokenMismatch)?;
-
-            if token_account.mint != token_guard.out_mint {
+            if token_account.mint != *membership_token_mint.key {
                 return Err(ErrorCode::MintMismatch.into());
             }
 
-            if token_account.amount == 0 {
-                return Err(ErrorCode::NoMembershipToken.into());
-            }
+            let metadata_account =
+                optional_metadata_account.ok_or(ErrorCode::MembershipTokenMismatch)?;
 
             check_nft_metadata(metadata_account, membership_token_mint, token_guard)?
         }

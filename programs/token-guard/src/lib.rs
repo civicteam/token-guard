@@ -2,6 +2,10 @@ mod guard_utils;
 mod nft_utils;
 mod token_utils;
 
+extern crate num;
+#[macro_use]
+extern crate num_derive;
+
 use anchor_lang::{prelude::*, solana_program::system_program, AnchorDeserialize, AnchorSerialize};
 
 declare_id!("tg7bdEQom2SZT1JB2d77RDJFYaL4eZ2FcM8HZZAg5Z8");
@@ -27,6 +31,7 @@ pub mod token_guard {
         allowance: Option<u8>,
         max_amount: Option<u64>,
         membership_token: Option<Pubkey>,
+        strategy: u8, // Type: Strategy- Anchor does not yet provide mappings for enums
     ) -> ProgramResult {
         let token_guard = &mut ctx.accounts.token_guard;
         let out_mint = &ctx.accounts.out_mint;
@@ -42,18 +47,13 @@ pub mod token_guard {
         token_guard.out_mint = *ctx.accounts.out_mint.key;
         token_guard.membership_token = membership_token;
 
-        let strategy = match membership_token {
-            Some(_) => Strategy::MembershipSPLToken,
-            None => Strategy::GatewayOnly,
-        };
-
         set_properties(
             token_guard,
             mint_authority_bump,
             start_time,
             allowance,
             max_amount,
-            strategy,
+            num::FromPrimitive::from_u8(strategy).unwrap(),
         );
 
         Ok(())
@@ -213,12 +213,12 @@ pub struct Exchange<'info> {
     rent: Sysvar<'info, Rent>,
 }
 
-#[derive(Clone, Debug, AnchorDeserialize, AnchorSerialize)]
+#[derive(Clone, Debug, AnchorDeserialize, AnchorSerialize, FromPrimitive)]
 pub enum Strategy {
-    GatewayOnly,
-    MembershipSPLToken,
-    MembershipNftUpdateAuthority,
-    MembershipNftCreator,
+    GatewayOnly = 0,
+    MembershipSPLToken = 1,
+    MembershipNftUpdateAuthority = 2,
+    MembershipNftCreator = 3,
 }
 impl Default for Strategy {
     fn default() -> Self {

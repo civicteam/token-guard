@@ -1,0 +1,23 @@
+{
+  "name": "Crypt",
+  "symbol": "NFTPro",
+  "description": "Crypt",
+  "seller_fee_basis_points": 1000,
+  "image": "https://www.arweave.net/34fSVdYbUxfjWd1nXCYEJO2S7Z8MHlaACcjp6Ggdkfw?ext=png",
+  "attributes": [],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://www.arweave.net/34fSVdYbUxfjWd1nXCYEJO2S7Z8MHlaACcjp6Ggdkfw?ext=png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image",
+    "creators": [
+      {
+        "address": "2ZjTrpdyeyue2PX9fjuHZrjHGEqJVL9jYWoa3tnH8jTL",
+        "share": 100
+      }
+    ]
+  }
+}

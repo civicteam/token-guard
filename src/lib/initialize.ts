@@ -3,7 +3,12 @@ import * as anchor from "@project-serum/anchor";
 import { MintLayout, Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { TokenGuard } from "../../target/types/token_guard";
 import { BN, Program, web3 } from "@project-serum/anchor";
-import { deriveMintAuthority, MembershipToken, TokenGuardState } from "./util";
+import {
+  deriveMintAuthority,
+  MembershipToken,
+  strategyToInt,
+  TokenGuardState,
+} from "./util";
 
 const DECIMALS = 9; // lamports in 1 sol
 
@@ -27,6 +32,7 @@ export const initialize = async (
   const allowanceOrNull = allowance || null;
   const maxAmountBN = maxAmount ? new BN(maxAmount) : null;
   const membershipTokenOrNull = membershipToken?.key || null;
+  const strategyValue = strategyToInt(membershipToken?.strategy);
 
   await program.rpc.initialize(
     gatekeeperNetwork,
@@ -35,6 +41,7 @@ export const initialize = async (
     allowanceOrNull,
     maxAmountBN,
     membershipTokenOrNull,
+    strategyValue,
     {
       accounts: {
         tokenGuard: tokenGuard.publicKey,
@@ -74,5 +81,6 @@ export const initialize = async (
     mintAuthority,
     outMint: mint.publicKey,
     recipient,
+    membershipToken,
   };
 };

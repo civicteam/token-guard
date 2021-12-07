@@ -170,13 +170,15 @@ pub fn check_and_update_allowance<'info>(
     token_guard: &ProgramAccount<TokenGuard>,
     allowance_account: &mut AccountInfo<'info>,
     payer: &Signer<'info>,
+    allowance_account_derive_key: &Pubkey,
     rent: &Sysvar<Rent>,
     system_program: &AccountInfo<'info>,
 ) -> ProgramResult {
-    // Does the payer have a remaining allowance?
+    // Does the token guard have an allowance requirement?
     msg!("Checking allowance");
     if token_guard.allowance > 0 {
         // token guard has an allowance requirement
+
         // if the allowance account does not exist, create it
         // if it exists, check if the value is already equal to the token guard allowance,
         // if so, error out, if not, increment it
@@ -196,7 +198,7 @@ pub fn check_and_update_allowance<'info>(
             let allowance_account_signer_seeds: &[&[_]] = &[
                 ALLOWANCE_ACCOUNT_SEED,
                 &token_guard.key().to_bytes(),
-                &payer.key.to_bytes(),
+                &allowance_account_derive_key.to_bytes(),
                 &[allowance_account_bump],
             ];
 

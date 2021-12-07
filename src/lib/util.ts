@@ -166,14 +166,14 @@ export const deriveMintAuthority = async (
 
 export const deriveAllowanceAccount = async (
   tokenGuard: web3.PublicKey,
-  sender: web3.PublicKey,
+  allowanceAccountDeriveKey: web3.PublicKey,
   program: Program<TokenGuard>
 ) => {
   return web3.PublicKey.findProgramAddress(
     [
       Buffer.from("token_guard_allowance_account"),
       tokenGuard.toBuffer(),
-      sender.toBuffer(),
+      allowanceAccountDeriveKey.toBuffer(),
     ],
     program.programId
   );

@@ -57,9 +57,24 @@ export const exchange = async (
     []
   );
 
+  const remainingAccounts = await getRemainingAccounts(
+    connection,
+    tokenGuardAccount as unknown as TokenGuardMembershipTokenState,
+    membershipTokenAccount
+  );
+
+  // If there is a membership token NFT, and an allowance
+  // then the allowance is based on that NFT, rather than the user's wallet
+  // in other words, the user cannot use the NFT more than x times,
+  // Even if the NFT is transferred to another user, it cannot be used again.
+  // If there is no membership token NFT, then the allowance is based on the user's wallet.
+  // Note - this line assumes the membership token mint is the second element in the remainingAccounts array
+  const allowanceAccountDeriveKey =
+    remainingAccounts.length > 1 ? remainingAccounts[1].pubkey : sender;
+
   const [allowanceAccount, allowanceAccountBump] = await deriveAllowanceAccount(
     tokenGuard,
-    sender,
+    allowanceAccountDeriveKey,
     program
   );
 
@@ -69,12 +84,6 @@ export const exchange = async (
     allowanceAccount: allowanceAccount.toString(),
     membershipTokenAccount: membershipTokenAccount?.toString(),
   });
-
-  const remainingAccounts = await getRemainingAccounts(
-    connection,
-    tokenGuardAccount as unknown as TokenGuardMembershipTokenState,
-    membershipTokenAccount
-  );
 
   const exchangeInstruction = program.instruction.exchange(
     new BN(amount),

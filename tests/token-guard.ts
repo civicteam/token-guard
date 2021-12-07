@@ -67,6 +67,7 @@ describe("token-guard", () => {
   const gatekeeper = web3.Keypair.generate();
   // the gateway token for the sender
   let gatewayToken: GatewayToken;
+  let gkService: GatekeeperService;
 
   const program = anchor.workspace.TokenGuard as Program<TokenGuard>;
 
@@ -84,13 +85,13 @@ describe("token-guard", () => {
 
   const exchangeAmount = 1_000;
 
-  const fund = (to: anchor.web3.PublicKey) =>
+  const fund = (to: anchor.web3.PublicKey, lamports: number = 500_000_000) =>
     provider.send(
       new web3.Transaction().add(
         web3.SystemProgram.transfer({
           fromPubkey: provider.wallet.publicKey,
           toPubkey: to,
-          lamports: 500_000_000,
+          lamports,
         })
       )
     );
@@ -103,6 +104,44 @@ describe("token-guard", () => {
       recentBlockhash: blockhash,
     }).add(...instructions);
     return provider.send(transaction, [sender]);
+  };
+
+  /**
+   * If the from address has a non-zero balance of the token, send one to the to address.
+   * Used to help separate tests from each other - e.g. if two tests share an NFT (for speed etc)
+   * then if the first test sends the NFT to a recipient, the second test should only try to do
+   * the same, if run in isolation.
+   *
+   * Note - assumes ATAs are used for from and to.
+   * @param token
+   * @param from
+   * @param to
+   */
+  const checkBalanceAndSend = async (
+    token: Token,
+    from: web3.Keypair,
+    to: web3.PublicKey
+  ) => {
+    const fromATA = await Token.getAssociatedTokenAddress(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      token.publicKey,
+      from.publicKey,
+      true
+    );
+    const toATA = await Token.getAssociatedTokenAddress(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      token.publicKey,
+      to,
+      true
+    );
+
+    const { amount: fromBalance } = await token.getAccountInfo(fromATA);
+
+    if (fromBalance.toNumber() > 0) {
+      await token.transfer(fromATA, toATA, from, [], 1);
+    }
   };
 
   before("Set up the log listener for easier debugging", async () => {
@@ -122,7 +161,7 @@ describe("token-guard", () => {
       gatekeeper,
       gatekeeperNetwork
     );
-    const gkService = new GatekeeperService(
+    gkService = new GatekeeperService(
       provider.connection,
       gatekeeper,
       gatekeeperNetwork.publicKey,
@@ -533,36 +572,64 @@ describe("token-guard", () => {
     });
 
     context("Membership Token NFT", () => {
-      context("Upgrade Authority strategy", () => {
-        let mint: web3.PublicKey;
-        let metadata: web3.PublicKey;
+      let nft: Token;
+      let mint: web3.PublicKey;
+      let metadata: web3.PublicKey;
+      let minterATA: web3.PublicKey;
+      let senderMembershipTokenATA: web3.PublicKey;
 
-        const nftMinter = web3.Keypair.generate();
-        const nftMinterProvider = new Provider(
-          provider.connection,
-          new anchor.Wallet(nftMinter),
-          {}
-        );
+      const nftMinter = web3.Keypair.generate();
+      const nftMinterProvider = new Provider(
+        provider.connection,
+        new anchor.Wallet(nftMinter),
+        {}
+      );
 
-        before("Mint an NFT", async () => {
-          await fund(nftMinter.publicKey);
-          sandbox.stub(axios, "get").resolves({ data: metadataJson });
-          // the minter has to be in the creators array
-          metadataJson.properties.creators[0].address =
-            nftMinter.publicKey.toBase58();
+      before("Mint an NFT", async () => {
+        // the minter needs more funds - is it paying arweave?
+        await fund(nftMinter.publicKey, 2_000_000_000);
 
-          const metadataUri = "somewhere";
-          const response = await actions.mintNFT({
-            connection: nftMinterProvider.connection,
-            wallet: nftMinterProvider.wallet,
-            uri: metadataUri,
-            maxSupply: 1,
-          });
+        // stub axios to look up dummy metadata
+        const metadataUri = "somewhere";
+        // the minter has to be in the creators array
+        metadataJson.properties.creators[0].address =
+          nftMinter.publicKey.toBase58();
+        sandbox.stub(axios, "get").resolves({ data: metadataJson });
 
-          mint = response.mint;
-          metadata = response.metadata;
+        const response = await actions.mintNFT({
+          connection: nftMinterProvider.connection,
+          wallet: nftMinterProvider.wallet,
+          uri: metadataUri,
+          maxSupply: 1,
         });
 
+        await nftMinterProvider.connection.confirmTransaction(response.txId);
+
+        mint = response.mint;
+        metadata = response.metadata;
+
+        nft = new Token(
+          nftMinterProvider.connection,
+          mint,
+          TOKEN_PROGRAM_ID,
+          nftMinter
+        );
+
+        console.log("Getting the minter's associated token account");
+        minterATA = await Token.getAssociatedTokenAddress(
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+          TOKEN_PROGRAM_ID,
+          mint,
+          nftMinter.publicKey
+        );
+
+        console.log("Creating the sender's associated token account");
+        senderMembershipTokenATA = await nft.createAssociatedTokenAccount(
+          sender.publicKey
+        );
+      });
+
+      context("Upgrade Authority strategy", () => {
         it("should initialize a tokenGuard that requires presentation of an NFT", async () => {
           tokenGuardState = await initialize(
             program,
@@ -596,29 +663,7 @@ describe("token-guard", () => {
         });
 
         it("should let someone with the token exchange", async () => {
-          const nft = new Token(
-            provider.connection,
-            mint,
-            TOKEN_PROGRAM_ID,
-            recipient
-          );
-          const minterATA = await Token.getAssociatedTokenAddress(
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-            TOKEN_PROGRAM_ID,
-            mint,
-            nftMinter.publicKey
-          );
-
-          const senderMembershipTokenATA = await nft.createAccount(
-            sender.publicKey
-          );
-          await nft.transfer(
-            minterATA,
-            senderMembershipTokenATA,
-            nftMinter,
-            [],
-            1
-          );
+          await checkBalanceAndSend(nft, nftMinter, sender.publicKey);
 
           const instructions = await exchange(
             provider.connection,
@@ -632,6 +677,83 @@ describe("token-guard", () => {
           );
 
           await sendTransactionFromSender(instructions);
+        });
+      });
+
+      context("with allowance", () => {
+        it("should initialize a tokenGuard that allows use of a membership token only once", async () => {
+          tokenGuardState = await initialize(
+            program,
+            provider,
+            gatekeeperNetwork.publicKey,
+            recipient.publicKey,
+            undefined,
+            1,
+            undefined,
+            {
+              key: nftMinter.publicKey,
+              strategy: "NFT-UA",
+            }
+          );
+        });
+
+        it("should let someone with the token exchange", async () => {
+          // Send the NFT from the minter to the sender
+          await checkBalanceAndSend(nft, nftMinter, sender.publicKey);
+
+          const instructions = await exchange(
+            provider.connection,
+            program,
+            tokenGuardState.id,
+            sender.publicKey,
+            sender.publicKey,
+            gatekeeperNetwork.publicKey,
+            exchangeAmount,
+            senderMembershipTokenATA
+          );
+
+          await sendTransactionFromSender(instructions);
+        });
+
+        it("should not let the same membership token be used again", async () => {
+          // create a new sender with a gateway token
+          const sender2 = web3.Keypair.generate();
+          await fund(sender2.publicKey);
+          await gkService.issue(sender2.publicKey);
+
+          // sender transfers the token to sender 2
+          const sender2MembershipTokenATA = await nft.createAccount(
+            sender2.publicKey
+          );
+          await nft.transfer(
+            senderMembershipTokenATA,
+            sender2MembershipTokenATA,
+            sender,
+            [],
+            1
+          );
+
+          const instructions = await exchange(
+            provider.connection,
+            program,
+            tokenGuardState.id,
+            sender2.publicKey,
+            sender2.publicKey,
+            gatekeeperNetwork.publicKey,
+            exchangeAmount,
+            sender2MembershipTokenATA
+          );
+
+          // send transaction from sender 2
+          const { blockhash } = await provider.connection.getRecentBlockhash();
+          const transaction = new web3.Transaction({
+            recentBlockhash: blockhash,
+          }).add(...instructions);
+          const shouldFail = provider.send(transaction, [sender2]);
+
+          return expect(shouldFail).to.be.rejectedWith(
+            /Transaction simulation failed/
+          );
         });
       });
     });

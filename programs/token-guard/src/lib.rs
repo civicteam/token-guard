@@ -82,6 +82,16 @@ pub mod token_guard {
         let membership_token_mint = &ctx.remaining_accounts.get(1);
         let membership_token_metadata = &ctx.remaining_accounts.get(2);
 
+      // If there is a membership token NFT, and an allowance
+      // then the allowance is based on that NFT, rather than the user's wallet
+      // in other words, the user cannot use the NFT more than x times,
+      // Even if the NFT is transferred to another user, it cannot be used again.
+      // If there is no membership token NFT, then the allowance is based on the user's wallet.
+      let allowance_account_derive_key = membership_token_mint.map_or(
+        payer.key,
+          |m| m.key
+      );
+
         check_start_time(clock, token_guard)?;
         check_max_amount(lamports, token_guard)?;
         check_gateway_token(gateway_token, payer, token_guard)?;
@@ -92,6 +102,7 @@ pub mod token_guard {
             &token_guard,
             &mut allowance_account,
             &payer,
+            &allowance_account_derive_key,
             &rent,
             &system_program,
         )?;
@@ -139,25 +150,6 @@ pub struct Initialize<'info> {
     recipient: AccountInfo<'info>,
     // #[account(seeds = [recipient, in_mint], bump=0, owner = anchor_spl::associated_token::AssociatedToken::id())]
     // recipient_ata: AccountInfo<'info>,
-    token_program: Program<'info, anchor_spl::token::Token>,
-    system_program: Program<'info, System>,
-    rent: Sysvar<'info, Rent>,
-}
-
-#[derive(Accounts)]
-pub struct InitializeWithMembershipToken<'info> {
-    #[account(init, payer = authority, space = TOKEN_GUARD_SIZE)]
-    token_guard: ProgramAccount<'info, TokenGuard>,
-    #[account(mut)]
-    authority: Signer<'info>,
-    #[account()]
-    membership_token: AccountInfo<'info>,
-    #[account()]
-    out_mint: AccountInfo<'info>,
-    #[account()]
-    mint_authority: AccountInfo<'info>,
-    #[account()]
-    recipient: AccountInfo<'info>,
     token_program: Program<'info, anchor_spl::token::Token>,
     system_program: Program<'info, System>,
     rent: Sysvar<'info, Rent>,

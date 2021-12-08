@@ -205,7 +205,7 @@ const getRemainingAccountsSPL = (
   },
 ];
 
-const getRemainingAccountsNFTUA = async (
+const getRemainingAccountsNFT = async (
   connection: web3.Connection,
   membershipTokenDetails: MembershipToken,
   membershipTokenAccount: web3.PublicKey
@@ -262,13 +262,12 @@ export const getRemainingAccounts = async (
         membershipTokenAccount
       );
     case "NFT-UA":
-      return getRemainingAccountsNFTUA(
+    case "NFT-Creator":
+      return getRemainingAccountsNFT(
         connection,
         membershipTokenDetails,
         membershipTokenAccount
       );
-    case "NFT-Creator":
-    // return getRemainingAccountsNFTCreator(membershipTokenDetails, membershipTokenAccount);
     default:
       throw new Error(`Unknown strategy: ${membershipTokenDetails.strategy}`);
   }

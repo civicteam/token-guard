@@ -26,6 +26,15 @@ pub fn check_nft_metadata(
                 }
             }
         },
+        Strategy::MembershipNftCreator => match token_guard.membership_token {
+            None => return Err(ErrorCode::InvalidStrategy.into()),
+            Some(key_to_match) => {
+                if metadata.data.creators.unwrap()[0].address != key_to_match {
+                    msg!("Metadata creator does not match membership token");
+                    return Err(ErrorCode::MembershipTokenMismatch.into());
+                }
+            }
+        },
         _ => {}
     }
 

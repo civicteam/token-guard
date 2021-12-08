@@ -46,11 +46,72 @@ are non-transferable.
 
 Set up an allowance with the `--allowance` flag.
 
+## Membership Tokens
+
+TokenGuard has a feature that allows you to set a membership token requirement. 
+
+Only users in possession of a membership token (and a Civic Pass) may exchange.
+
+Membership tokens are not consumed by the TokenGuard. They come in two forms:
+
+1. SPL Token
+
+If the membership token is an SPL token mint, then the user must present a token account
+for that mint with a balance of at least one token.
+
+2. NFT
+
+If the membership token is an NFT, then the user must present a token account containing an
+NFT in the same collection, according to the
+[Metaplex Token Metadata](https://github.com/metaplex-foundation/metaplex/tree/master/rust/token-metadata)
+program.
+
+As there is no current standard for defining a collection, the token-guard creator must
+define the collection strategy at creation-time.
+
+a) UpdateAuthority: The NFT collection is defined by updateAuthority in the metadata (default)
+b) Creator: The NFT collection is defined by the first creator in the metadata
+
+### Use-once NFTs
+
+The membership-token feature can be combined with the allowance feature, to, for example,
+allow each user to exchange once.
+
+For example, if you have community where each user has an NFT, and you want to send a gift to
+each member of the community, you can set up a tokenguard as follows:
+
+- membership token = NFT (either strategy)
+- allowance = 1
+
+This will allow each NFT holder to call the guarded smart contract only once.
+
+Note - when used in conjunction with membership tokens, the allowance feature uses the membership
+token account as the unique identifier. If a user has two token accounts (i.e. two NFTs), they
+can make two calls.
+
+### Examples
+
+To create tokenGuards using membership tokens:
+
+```shell
+# SPL Example
+token-guard create --membershipToken <SPL_TOKEN_MINT>
+
+# NFT example with update-authority check
+token-guard create --membershipToken <NFT_UPDATE_AUTHORITY>
+
+# NFT example with creator check
+token-guard create --membershipToken <NFT_CREATOR> --strategy NFT-Creator
+
+# NFT example with creator check and allowance
+token-guard create --membershipToken <NFT_CREATOR> --strategy NFT-Creator --allowance 1
+```
+
 ## Coming Soon
 
 [ ] Support for SPL Token (accept SPL instead of Sol)
 
-[ ] Support for membership tokens (non-consumed tokens)
+[x] Support for membership tokens (non-consumed tokens)
 
 [ ] Mainnet deployment
 
@@ -155,13 +216,37 @@ await program.rpc.mintNft({
 });
 ```
 
-## Build and deploy the program from scratch
+## Development
+
+To get set up:
 
 ```shell
-$ cargo install anchor
+cargo install anchor
+yarn
+```
+
+### Build and deploy the program from scratch
+
+```shell
 $ anchor build
 $ anchor deploy
 $ anchor idl init
+```
+
+### Testing the cli locally
+
+You can test the CLI against a local network without having to use devnet etc.
+
+In one shell:
+```shell
+anchor localnet
+yarn id:deploy-local
+```
+
+In another shell:
+
+```
+./bin/run create
 ```
 
 ## FAQ

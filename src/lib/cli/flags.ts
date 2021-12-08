@@ -1,8 +1,14 @@
 import { web3 } from "@project-serum/anchor";
 
 import { flags } from "@oclif/command";
-import { ExtendedCluster, getClusterUrl } from "../util";
+import {
+  ExtendedCluster,
+  getClusterUrl,
+  parseStrategy,
+  Strategy,
+} from "../util";
 import { getKeypair, getProvider } from "./utils";
+import { Definition, IOptionFlag } from "@oclif/command/lib/flags";
 
 export const gatekeeperNetworkPubkeyFlag = flags.build<web3.PublicKey>({
   char: "n",
@@ -19,6 +25,41 @@ export const recipientPubkeyFlag = flags.build<web3.PublicKey>({
   default: () => getKeypair().publicKey,
   description:
     "The public key (in base 58) of the recipient of funds paid via this TokenGuard.",
+});
+
+export const membershipTokenFlag = flags.build<web3.PublicKey>({
+  char: "m",
+  parse: (pubkey: string) => new web3.PublicKey(pubkey),
+  description: `An optional membership token that a user must present when exchanging via TokenGuard.
+
+The membership token can be an SPL token or NFT from a particular collection.
+
+If this key is an SPL-Token mint, the user must present a token account with a balance of at least one token.
+Otherwise, the key is assumed to identify the NFT collection, and the user must present a token account from the same collection.`,
+});
+
+export const membershipTokenStrategyFlag = flags.build<Strategy>({
+  char: "s",
+  parse: (strategy: string) => parseStrategy(strategy),
+  default: (context) => {
+    if (context.flags.membershipToken) {
+      return "NFT-UA";
+    }
+    return undefined;
+  },
+  dependsOn: ["membershipToken"],
+  options: ["NFT-UA", "NFT-Creator"],
+  description: `If presenting an NFT membership token, the strategy used to define an NFT collection.
+Note - only used in conjunction with the membershipToken flag.
+
+Options:
+NFT-UA [default]: The NFT collection is defined by updateAuthority in the metadata.
+NFT-Creator: The NFT collection is defined by the first creator in the metadata.`,
+});
+
+export const allowanceFlag: IOptionFlag<number | undefined> = flags.integer({
+  char: "a",
+  description: `The number of times a buyer can use this tokenGuard (default no limit)`,
 });
 
 export const clusterFlag = flags.build<ExtendedCluster>({

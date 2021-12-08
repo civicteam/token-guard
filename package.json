@@ -69,6 +69,7 @@
     "compile": "tsc -p tsconfig.json",
     "prepare": "yarn build",
     "lint": "yarn eslint src/ tests/ --ext ts",
-    "test": "anchor test"
+    "test": "anchor test",
+    "idl:deploy-local": "anchor idl --provider.cluster localnet init --filepath target/idl/token_guard.json tg7bdEQom2SZT1JB2d77RDJFYaL4eZ2FcM8HZZAg5Z8"
   }
 }

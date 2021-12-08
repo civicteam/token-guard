@@ -45,6 +45,16 @@ export type MembershipToken = {
   strategy: Strategy;
 };
 
+const isValidStrategy = (strategy: string): boolean =>
+  ["SPL", "NFT-UA", "NFT-Creator"].includes(strategy);
+
+export const parseStrategy = (strategy: string): Strategy => {
+  if (!isValidStrategy(strategy)) {
+    throw new Error(`Invalid strategy: ${strategy}`);
+  }
+  return strategy as Strategy;
+};
+
 // should match the Strategy enum in lib.rs
 // TODO Can anchor generate this mapping?
 export const strategyToInt = (strategy?: Strategy): number => {

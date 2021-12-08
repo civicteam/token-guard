@@ -82,15 +82,12 @@ pub mod token_guard {
         let membership_token_mint = &ctx.remaining_accounts.get(1);
         let membership_token_metadata = &ctx.remaining_accounts.get(2);
 
-      // If there is a membership token NFT, and an allowance
-      // then the allowance is based on that NFT, rather than the user's wallet
-      // in other words, the user cannot use the NFT more than x times,
-      // Even if the NFT is transferred to another user, it cannot be used again.
-      // If there is no membership token NFT, then the allowance is based on the user's wallet.
-      let allowance_account_derive_key = membership_token_mint.map_or(
-        payer.key,
-          |m| m.key
-      );
+        // If there is a membership token NFT, and an allowance
+        // then the allowance is based on that NFT, rather than the user's wallet
+        // in other words, the user cannot use the NFT more than x times,
+        // Even if the NFT is transferred to another user, it cannot be used again.
+        // If there is no membership token NFT, then the allowance is based on the user's wallet.
+        let allowance_account_derive_key = membership_token_mint.map_or(payer.key, |m| m.key);
 
         check_start_time(clock, token_guard)?;
         check_max_amount(lamports, token_guard)?;

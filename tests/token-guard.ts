@@ -680,6 +680,57 @@ describe("token-guard", () => {
         });
       });
 
+      context("Creator strategy", () => {
+        it("should initialize a tokenGuard that requires presentation of an NFT", async () => {
+          tokenGuardState = await initialize(
+            program,
+            provider,
+            gatekeeperNetwork.publicKey,
+            recipient.publicKey,
+            undefined,
+            undefined,
+            undefined,
+            {
+              key: nftMinter.publicKey,
+              strategy: "NFT-Creator",
+            }
+          );
+        });
+
+        it("should not let someone without the membership token exchange", async () => {
+          const shouldFail = exchange(
+            provider.connection,
+            program,
+            tokenGuardState.id,
+            sender.publicKey,
+            sender.publicKey,
+            gatekeeperNetwork.publicKey,
+            exchangeAmount
+          );
+
+          return expect(shouldFail).to.be.rejectedWith(
+            /Membership token account not found/
+          );
+        });
+
+        it("should let someone with the token exchange", async () => {
+          await checkBalanceAndSend(nft, nftMinter, sender.publicKey);
+
+          const instructions = await exchange(
+            provider.connection,
+            program,
+            tokenGuardState.id,
+            sender.publicKey,
+            sender.publicKey,
+            gatekeeperNetwork.publicKey,
+            exchangeAmount,
+            senderMembershipTokenATA
+          );
+
+          await sendTransactionFromSender(instructions);
+        });
+      });
+
       context("with allowance", () => {
         it("should initialize a tokenGuard that allows use of a membership token only once", async () => {
           tokenGuardState = await initialize(

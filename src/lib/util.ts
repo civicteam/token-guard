@@ -35,7 +35,7 @@ export interface TokenGuardState {
   outMint: web3.PublicKey;
   recipient: web3.PublicKey;
   mintAuthority: web3.PublicKey;
-  gatekeeperNetwork: web3.PublicKey;
+  gatekeeperNetwork?: web3.PublicKey;
   membershipToken?: MembershipToken;
 }
 

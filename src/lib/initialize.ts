@@ -16,7 +16,7 @@ export const initialize = async (
   program: Program<TokenGuard>,
   provider: anchor.Provider,
   recipient: anchor.web3.PublicKey,
-  gatekeeperNetwork: anchor.web3.PublicKey,
+  gatekeeperNetwork?: anchor.web3.PublicKey,
   startTime?: number,
   allowance?: number,
   maxAmount?: number,
@@ -28,6 +28,7 @@ export const initialize = async (
     tokenGuard.publicKey,
     program
   );
+  const gatekeeperNetworkOrNull = gatekeeperNetwork || null;
   const startTimeBN = startTime ? new BN(startTime) : null;
   const allowanceOrNull = allowance || null;
   const maxAmountBN = maxAmount ? new BN(maxAmount) : null;
@@ -36,7 +37,7 @@ export const initialize = async (
 
   await program.rpc.initialize(
     mintAuthorityBump,
-    gatekeeperNetwork,
+    gatekeeperNetworkOrNull,
     startTimeBN,
     allowanceOrNull,
     maxAmountBN,

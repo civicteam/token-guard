@@ -90,7 +90,11 @@ Mint: ${tokenGuardState.outMint}
 
 Additional Details:
 
-GatekeeperNetwork: ${tokenGuardState.gatekeeperNetwork}
+${
+  tokenGuardState.gatekeeperNetwork
+    ? `GatekeeperNetwork: ${tokenGuardState.gatekeeperNetwork}`
+    : "GatekeeperNetwork: Not required"
+}
 Recipient: ${tokenGuardState.recipient}
 MintAuthority: ${tokenGuardState.mintAuthority}
 ${

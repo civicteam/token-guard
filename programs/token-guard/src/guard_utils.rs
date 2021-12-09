@@ -67,19 +67,23 @@ pub fn check_gateway_token(
     payer: &AccountInfo,
     token_guard: &ProgramAccount<TokenGuard>,
 ) -> ProgramResult {
-    msg!(
-        "Verifying gateway token {} on network {} belongs to {}",
-        gateway_token.key,
-        token_guard.gatekeeper_network,
-        payer.key()
-    );
+    if let Some(gatekeeper_network) = token_guard.gatekeeper_network {
+        msg!(
+            "Verifying gateway token {} on network {} belongs to {}",
+            gateway_token.key,
+            gatekeeper_network,
+            payer.key()
+        );
 
-    Gateway::verify_gateway_token_account_info(
-        &gateway_token,
-        &payer.key(),
-        &token_guard.gatekeeper_network,
-    )?;
-    msg!("Gateway token verified");
+        Gateway::verify_gateway_token_account_info(
+            &gateway_token,
+            &payer.key(),
+            &gatekeeper_network,
+        )?;
+        msg!("Gateway token verified");
+    } else {
+        msg!("Gateway token not required");
+    }
 
     Ok(())
 }

@@ -25,8 +25,8 @@ pub mod token_guard {
 
     pub fn initialize(
         ctx: Context<Initialize>,
-        gatekeeper_network: Pubkey,
         mint_authority_bump: u8,
+        gatekeeper_network: Pubkey,
         start_time: Option<i64>,
         allowance: Option<u8>,
         max_amount: Option<u64>,

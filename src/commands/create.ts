@@ -75,8 +75,8 @@ $ token-guard create -h
     const tokenGuardState = await initialize(
       program,
       provider,
-      flags.gatekeeperNetwork,
       flags.recipient,
+      flags.gatekeeperNetwork,
       flags.startTime,
       flags.allowance,
       flags.maxAmount,

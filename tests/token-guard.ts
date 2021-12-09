@@ -186,8 +186,8 @@ describe("token-guard", () => {
       tokenGuardState = await initialize(
         program,
         provider,
-        gatekeeperNetwork.publicKey,
-        recipient.publicKey
+        recipient.publicKey,
+        gatekeeperNetwork.publicKey
       );
 
       console.log({
@@ -295,8 +295,8 @@ describe("token-guard", () => {
       tokenGuardState = await initialize(
         program,
         provider,
-        gatekeeperNetwork.publicKey,
         recipient.publicKey,
+        gatekeeperNetwork.publicKey,
         Date.now() + 1_000_000
       );
     });
@@ -341,8 +341,8 @@ describe("token-guard", () => {
       tokenGuardState = await initialize(
         program,
         provider,
-        gatekeeperNetwork.publicKey,
         recipient.publicKey,
+        gatekeeperNetwork.publicKey,
         undefined,
         2
       );
@@ -376,8 +376,8 @@ describe("token-guard", () => {
       tokenGuardState = await initialize(
         program,
         provider,
-        gatekeeperNetwork.publicKey,
         recipient.publicKey,
+        gatekeeperNetwork.publicKey,
         undefined,
         undefined,
         exchangeAmount - 100 // smaller than the exchange amount
@@ -439,8 +439,8 @@ describe("token-guard", () => {
         tokenGuardState = await initialize(
           program,
           provider,
-          gatekeeperNetwork.publicKey,
           recipient.publicKey,
+          gatekeeperNetwork.publicKey,
           undefined,
           undefined,
           undefined,
@@ -634,8 +634,8 @@ describe("token-guard", () => {
           tokenGuardState = await initialize(
             program,
             provider,
-            gatekeeperNetwork.publicKey,
             recipient.publicKey,
+            gatekeeperNetwork.publicKey,
             undefined,
             undefined,
             undefined,
@@ -685,8 +685,8 @@ describe("token-guard", () => {
           tokenGuardState = await initialize(
             program,
             provider,
-            gatekeeperNetwork.publicKey,
             recipient.publicKey,
+            gatekeeperNetwork.publicKey,
             undefined,
             undefined,
             undefined,
@@ -736,8 +736,8 @@ describe("token-guard", () => {
           tokenGuardState = await initialize(
             program,
             provider,
-            gatekeeperNetwork.publicKey,
             recipient.publicKey,
+            gatekeeperNetwork.publicKey,
             undefined,
             1,
             undefined,

@@ -731,6 +731,57 @@ describe("token-guard", () => {
         });
       });
 
+      context("Creator strategy without a gateway token", () => {
+        it("should initialize a tokenGuard that requires presentation of an NFT but not a gateway token", async () => {
+          tokenGuardState = await initialize(
+            program,
+            provider,
+            recipient.publicKey,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            {
+              key: nftMinter.publicKey,
+              strategy: "NFT-Creator",
+            }
+          );
+        });
+
+        it("should not let someone without the membership token exchange", async () => {
+          const shouldFail = exchange(
+            provider.connection,
+            program,
+            tokenGuardState.id,
+            sender.publicKey,
+            sender.publicKey,
+            undefined,
+            exchangeAmount
+          );
+
+          return expect(shouldFail).to.be.rejectedWith(
+            /Membership token account not found/
+          );
+        });
+
+        it("should let someone with the token exchange", async () => {
+          await checkBalanceAndSend(nft, nftMinter, sender.publicKey);
+
+          const instructions = await exchange(
+            provider.connection,
+            program,
+            tokenGuardState.id,
+            sender.publicKey,
+            sender.publicKey,
+            undefined,
+            exchangeAmount,
+            senderMembershipTokenATA
+          );
+
+          await sendTransactionFromSender(instructions);
+        });
+      });
+
       context("with allowance", () => {
         it("should initialize a tokenGuard that allows use of a membership token only once", async () => {
           tokenGuardState = await initialize(

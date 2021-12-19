@@ -180,7 +180,6 @@ describe("token-guard", () => {
   );
 
   after(sandbox.restore);
-
   context("Gateway Token only", () => {
     it("initialises a new tokenGuard", async () => {
       tokenGuardState = await initialize(
@@ -585,12 +584,13 @@ describe("token-guard", () => {
         {}
       );
 
+      const dummyMetadataUri = "somewhere";
+
       before("Mint an NFT", async () => {
         // the minter needs more funds - is it paying arweave?
         await fund(nftMinter.publicKey, 2_000_000_000);
 
         // stub axios to look up dummy metadata
-        const metadataUri = "somewhere";
         // the minter has to be in the creators array
         metadataJson.properties.creators[0].address =
           nftMinter.publicKey.toBase58();
@@ -599,7 +599,7 @@ describe("token-guard", () => {
         const response = await actions.mintNFT({
           connection: nftMinterProvider.connection,
           wallet: nftMinterProvider.wallet,
-          uri: metadataUri,
+          uri: dummyMetadataUri,
           maxSupply: 1,
         });
 
@@ -627,57 +627,6 @@ describe("token-guard", () => {
         senderMembershipTokenATA = await nft.createAssociatedTokenAccount(
           sender.publicKey
         );
-      });
-
-      context("Upgrade Authority strategy", () => {
-        it("should initialize a tokenGuard that requires presentation of an NFT", async () => {
-          tokenGuardState = await initialize(
-            program,
-            provider,
-            gatekeeperNetwork.publicKey,
-            recipient.publicKey,
-            undefined,
-            undefined,
-            undefined,
-            {
-              key: nftMinter.publicKey,
-              strategy: "NFT-UA",
-            }
-          );
-        });
-
-        it("should not let someone without the membership token exchange", async () => {
-          const shouldFail = exchange(
-            provider.connection,
-            program,
-            tokenGuardState.id,
-            sender.publicKey,
-            sender.publicKey,
-            gatekeeperNetwork.publicKey,
-            exchangeAmount
-          );
-
-          return expect(shouldFail).to.be.rejectedWith(
-            /Membership token account not found/
-          );
-        });
-
-        it("should let someone with the token exchange", async () => {
-          await checkBalanceAndSend(nft, nftMinter, sender.publicKey);
-
-          const instructions = await exchange(
-            provider.connection,
-            program,
-            tokenGuardState.id,
-            sender.publicKey,
-            sender.publicKey,
-            gatekeeperNetwork.publicKey,
-            exchangeAmount,
-            senderMembershipTokenATA
-          );
-
-          await sendTransactionFromSender(instructions);
-        });
       });
 
       context("Creator strategy", () => {
@@ -713,6 +662,70 @@ describe("token-guard", () => {
           );
         });
 
+        it("should not let someone with a membership token from an unverified creator exchange", async () => {
+          // the sender tries to mint their own NFT
+          // first they add their own address as a creator
+          // but keep the original address as the first creator
+          const bogusMetadataJson = {
+            ...metadataJson,
+            properties: {
+              ...metadataJson.properties,
+              creators: [
+                ...metadataJson.properties.creators,
+                {
+                  address: sender.publicKey.toBase58(),
+                  verified: false,
+                },
+              ],
+            },
+          };
+          sandbox.restore();
+          sandbox.stub(axios, "get").resolves({ data: bogusMetadataJson });
+
+          // next they mint their own NFT (To themselves)
+          await fund(sender.publicKey, 2_000_000_000);
+          const senderProvider = new Provider(
+            provider.connection,
+            new anchor.Wallet(sender),
+            {}
+          );
+          const response = await actions.mintNFT({
+            connection: senderProvider.connection,
+            wallet: senderProvider.wallet,
+            uri: dummyMetadataUri,
+            maxSupply: 1,
+          });
+          await senderProvider.connection.confirmTransaction(response.txId);
+
+          const bogusMint = response.mint;
+
+          const bogusSenderMembershipTokenATA =
+            await Token.getAssociatedTokenAddress(
+              ASSOCIATED_TOKEN_PROGRAM_ID,
+              TOKEN_PROGRAM_ID,
+              bogusMint,
+              sender.publicKey
+            );
+
+          // then they try to use that token to exchange
+          const instructions = await exchange(
+            provider.connection,
+            program,
+            tokenGuardState.id,
+            sender.publicKey,
+            sender.publicKey,
+            gatekeeperNetwork.publicKey,
+            exchangeAmount,
+            bogusSenderMembershipTokenATA
+          );
+
+          const shouldFail = sendTransactionFromSender(instructions);
+
+          return expect(shouldFail).to.be.rejectedWith(
+            /Transaction simulation failed/
+          );
+        });
+
         it("should let someone with the token exchange", async () => {
           await checkBalanceAndSend(nft, nftMinter, sender.publicKey);
 
@@ -743,7 +756,7 @@ describe("token-guard", () => {
             undefined,
             {
               key: nftMinter.publicKey,
-              strategy: "NFT-UA",
+              strategy: "NFT-Creator",
             }
           );
         });

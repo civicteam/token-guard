@@ -21,7 +21,7 @@ const getMembershipTokenFromFlags = (flags: {
 
   return {
     key: flags.membershipToken,
-    strategy: flags.strategy || "NFT-UA",
+    strategy: flags.strategy || "SPL",
   };
 };
 

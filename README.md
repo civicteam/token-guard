@@ -66,11 +66,8 @@ NFT in the same collection, according to the
 [Metaplex Token Metadata](https://github.com/metaplex-foundation/metaplex/tree/master/rust/token-metadata)
 program.
 
-As there is no current standard for defining a collection, the token-guard creator must
-define the collection strategy at creation-time.
-
-a) UpdateAuthority: The NFT collection is defined by updateAuthority in the metadata (default)
-b) Creator: The NFT collection is defined by the first creator in the metadata
+The NFT collection is defined by the first creator in the metadata creators array. This creator must have
+the verified flag set.
 
 ### Use-once NFTs
 
@@ -96,9 +93,6 @@ To create tokenGuards using membership tokens:
 ```shell
 # SPL Example
 token-guard create --membershipToken <SPL_TOKEN_MINT>
-
-# NFT example with update-authority check
-token-guard create --membershipToken <NFT_UPDATE_AUTHORITY>
 
 # NFT example with creator check
 token-guard create --membershipToken <NFT_CREATOR> --strategy NFT-Creator

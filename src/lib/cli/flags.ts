@@ -43,18 +43,15 @@ export const membershipTokenStrategyFlag = flags.build<Strategy>({
   parse: (strategy: string) => parseStrategy(strategy),
   default: (context) => {
     if (context.flags.membershipToken) {
-      return "NFT-UA";
+      return "SPL";
     }
     return undefined;
   },
   dependsOn: ["membershipToken"],
-  options: ["NFT-UA", "NFT-Creator"],
-  description: `If presenting an NFT membership token, the strategy used to define an NFT collection.
-Note - only used in conjunction with the membershipToken flag.
-
-Options:
-NFT-UA [default]: The NFT collection is defined by updateAuthority in the metadata.
-NFT-Creator: The NFT collection is defined by the first creator in the metadata.`,
+  options: ["SPL", "NFT-Creator"],
+  description: `If presenting a membership token, the strategy to use to validate the token.
+If the token is an NFT, the presented token must belong to the same collection.
+The NFT collection is defined by the first creator in the metadata.`,
 });
 
 export const allowanceFlag: IOptionFlag<number | undefined> = flags.integer({

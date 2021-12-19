@@ -39,14 +39,14 @@ export interface TokenGuardState {
   membershipToken?: MembershipToken;
 }
 
-export type Strategy = "SPL" | "NFT-UA" | "NFT-Creator";
+export type Strategy = "SPL" | "NFT-Creator";
 export type MembershipToken = {
   key: web3.PublicKey;
   strategy: Strategy;
 };
 
 const isValidStrategy = (strategy: string): boolean =>
-  ["SPL", "NFT-UA", "NFT-Creator"].includes(strategy);
+  ["SPL", "NFT-Creator"].includes(strategy);
 
 export const parseStrategy = (strategy: string): Strategy => {
   if (!isValidStrategy(strategy)) {
@@ -65,10 +65,8 @@ export const strategyToInt = (strategy?: Strategy): number => {
   switch (strategy) {
     case "SPL":
       return 1;
-    case "NFT-UA":
-      return 2;
     case "NFT-Creator":
-      return 3;
+      return 2;
     default:
       throw new Error(`Unknown strategy: ${strategy}`);
   }
@@ -80,8 +78,6 @@ const structToStrategy = (strategyValue: any): Strategy | undefined => {
   // with an object literal as a value: {}
   if (strategyValue.hasOwnProperty("gatewayOnly")) return undefined;
   if (strategyValue.hasOwnProperty("membershipSplToken")) return "SPL";
-  if (strategyValue.hasOwnProperty("membershipNftUpdateAuthority"))
-    return "NFT-UA";
   if (strategyValue.hasOwnProperty("membershipNftCreator"))
     return "NFT-Creator";
 
@@ -261,7 +257,6 @@ export const getRemainingAccounts = async (
         membershipTokenDetails,
         membershipTokenAccount
       );
-    case "NFT-UA":
     case "NFT-Creator":
       return getRemainingAccountsNFT(
         connection,

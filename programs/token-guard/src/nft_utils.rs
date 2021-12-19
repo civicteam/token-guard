@@ -17,21 +17,20 @@ pub fn check_nft_metadata(
     }
 
     match token_guard.strategy {
-        Strategy::MembershipNftUpdateAuthority => match token_guard.membership_token {
-            None => return Err(ErrorCode::InvalidStrategy.into()),
-            Some(key_to_match) => {
-                if metadata.update_authority != key_to_match {
-                    msg!("Metadata update authority does not match membership token");
-                    return Err(ErrorCode::MembershipTokenMismatch.into());
-                }
-            }
-        },
         Strategy::MembershipNftCreator => match token_guard.membership_token {
             None => return Err(ErrorCode::InvalidStrategy.into()),
             Some(key_to_match) => {
-                if metadata.data.creators.unwrap()[0].address != key_to_match {
+                let first_creator = &metadata.data.creators.unwrap()[0];
+                if first_creator.address != key_to_match {
                     msg!("Metadata creator does not match membership token");
                     return Err(ErrorCode::MembershipTokenMismatch.into());
+                }
+
+                // in order to prevent users from minting their own NFTs and claiming
+                // it belongs to the collection, we only allow verified creators here.
+                if !first_creator.verified {
+                    msg!("NFT creator is not verified");
+                    return Err(ErrorCode::UnverifiedMembershipTokenCreator.into());
                 }
             }
         },

@@ -64,7 +64,7 @@
   "scripts": {
     "postpack": "rm -f oclif.manifest.json",
     "prepack": "rm -rf dist && tsc -b && oclif-dev manifest && oclif-dev readme",
-    "build": "yarn clean && yarn compile",
+    "build": "yarn clean && anchor build && yarn compile",
     "clean": "rimraf -rf ./dist",
     "compile": "tsc -p tsconfig.json",
     "prepare": "yarn build",

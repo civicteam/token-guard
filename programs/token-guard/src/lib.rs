@@ -206,8 +206,7 @@ pub struct Exchange<'info> {
 pub enum Strategy {
     GatewayOnly = 0,
     MembershipSPLToken = 1,
-    MembershipNftUpdateAuthority = 2,
-    MembershipNftCreator = 3,
+    MembershipNftCreator = 2,
 }
 impl Default for Strategy {
     fn default() -> Self {
@@ -269,4 +268,6 @@ pub enum ErrorCode {
     NoMembershipToken,
     #[msg("The strategy does not match the properties of the TokenGuard")]
     InvalidStrategy,
+    #[msg("The presented membership token has an unverified creator")]
+    UnverifiedMembershipTokenCreator,
 }
